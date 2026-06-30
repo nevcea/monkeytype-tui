@@ -18,8 +18,8 @@ pub enum Screen {
     Settings,
 }
 
-pub const TIME_OPTIONS: &[u64] = &[5, 15, 30, 60, 120, 180];
-pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100, 200, 500];
+pub const TIME_OPTIONS: &[u64] = &[15, 30, 60, 120];
+pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100];
 pub const LANG_PICKER_VISIBLE: usize = 12;
 const CUSTOM_INPUT_MAX_LEN: usize = 5;
 
@@ -100,7 +100,7 @@ impl App {
             game,
             settings,
             menu_mode: Mode::Time(30),
-            menu_time_idx: 2,
+            menu_time_idx: 1,
             menu_word_idx: 2,
             custom_input: None,
             custom_time_val: 45,
@@ -471,7 +471,13 @@ impl App {
                         .unwrap_or(self.custom_words_val),
                 );
             }
-            Mode::Quote => {}
+            Mode::Quote => {
+                self.settings.quote_filter = if forward {
+                    self.settings.quote_filter.next()
+                } else {
+                    self.settings.quote_filter.prev()
+                };
+            }
         }
     }
 

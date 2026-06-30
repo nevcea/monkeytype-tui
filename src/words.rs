@@ -444,6 +444,8 @@ pub fn load_words(lang_idx: usize, size_idx: usize) -> Vec<String> {
 pub struct QuoteEntry {
     pub text: String,
     pub source: String,
+    #[serde(default)]
+    pub length: u64,
 }
 
 pub fn load_quotes_for(lang: &str) -> Vec<QuoteEntry> {

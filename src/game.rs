@@ -70,6 +70,55 @@ impl CursorShape {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum QuoteFilter {
+    #[default]
+    All,
+    Short,   // ≤ 100 chars
+    Medium,  // 101–300
+    Long,    // 301–600
+    Thicc,   // 601+
+}
+
+impl QuoteFilter {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::All => "all",
+            Self::Short => "short",
+            Self::Medium => "medium",
+            Self::Long => "long",
+            Self::Thicc => "thicc",
+        }
+    }
+    pub fn matches(self, len: u64) -> bool {
+        match self {
+            Self::All => true,
+            Self::Short => len <= 100,
+            Self::Medium => (101..=300).contains(&len),
+            Self::Long => (301..=600).contains(&len),
+            Self::Thicc => len >= 601,
+        }
+    }
+    pub fn next(self) -> Self {
+        match self {
+            Self::All => Self::Short,
+            Self::Short => Self::Medium,
+            Self::Medium => Self::Long,
+            Self::Long => Self::Thicc,
+            Self::Thicc => Self::All,
+        }
+    }
+    pub fn prev(self) -> Self {
+        match self {
+            Self::All => Self::Thicc,
+            Self::Short => Self::All,
+            Self::Medium => Self::Short,
+            Self::Long => Self::Medium,
+            Self::Thicc => Self::Long,
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Default, Debug)]
 pub enum Difficulty {
     #[default]
@@ -111,6 +160,7 @@ pub struct Settings {
     pub cursor_shape: CursorShape,
     pub history_expiry: HistoryExpiry,
     pub difficulty: Difficulty,
+    pub quote_filter: QuoteFilter,
 }
 
 pub struct GameState {
@@ -182,16 +232,36 @@ impl GameState {
                 (w, None)
             }
             Mode::Quote => {
-                if self.all_quotes.is_empty() {
+                let filter = self.settings.quote_filter;
+                let pool: Vec<usize> = self
+                    .all_quotes
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, q)| filter.matches(q.length))
+                    .map(|(i, _)| i)
+                    .collect();
+                // fall back to full list if filter yields nothing
+                let pool: &[usize] = if pool.is_empty() {
+                    &[]
+                } else {
+                    &pool
+                };
+                let n = if pool.is_empty() {
+                    self.all_quotes.len()
+                } else {
+                    pool.len()
+                };
+                if n == 0 {
                     (vec!["no quotes loaded".to_string()], None)
                 } else {
-                    let n = self.all_quotes.len();
-                    let mut idx = rng.random_range(0..n);
+                    let mut pos = rng.random_range(0..n);
                     if n > 1 {
-                        while Some(idx) == self.last_quote_idx {
-                            idx = rng.random_range(0..n);
+                        let real_idx = |p| if pool.is_empty() { p } else { pool[p] };
+                        while Some(real_idx(pos)) == self.last_quote_idx {
+                            pos = rng.random_range(0..n);
                         }
                     }
+                    let idx = if pool.is_empty() { pos } else { pool[pos] };
                     self.last_quote_idx = Some(idx);
                     let q = &self.all_quotes[idx];
                     let words = q.text.split_whitespace().map(String::from).collect();
