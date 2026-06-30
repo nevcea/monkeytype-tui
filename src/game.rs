@@ -74,10 +74,10 @@ impl CursorShape {
 pub enum QuoteFilter {
     #[default]
     All,
-    Short,   // ≤ 100 chars
-    Medium,  // 101–300
-    Long,    // 301–600
-    Thicc,   // 601+
+    Short,  // ≤ 100 chars
+    Medium, // 101–300
+    Long,   // 301–600
+    Thicc,  // 601+
 }
 
 impl QuoteFilter {
@@ -241,11 +241,7 @@ impl GameState {
                     .map(|(i, _)| i)
                     .collect();
                 // fall back to full list if filter yields nothing
-                let pool: &[usize] = if pool.is_empty() {
-                    &[]
-                } else {
-                    &pool
-                };
+                let pool: &[usize] = if pool.is_empty() { &[] } else { &pool };
                 let n = if pool.is_empty() {
                     self.all_quotes.len()
                 } else {

@@ -150,7 +150,11 @@ pub(super) fn horiz_pad(r: Rect, pad: u16) -> Rect {
     }
 }
 
-pub(super) fn mode_tab_n(num: &'static str, label: impl Into<String>, active: bool) -> Span<'static> {
+pub(super) fn mode_tab_n(
+    num: &'static str,
+    label: impl Into<String>,
+    active: bool,
+) -> Span<'static> {
     let text = format!("{num}·{}", label.into());
     if active {
         Span::styled(
