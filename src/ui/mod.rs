@@ -34,10 +34,14 @@ pub fn draw(f: &mut Frame, app: &App) {
     f.render_widget(bg, f.area());
 
     let area = f.area();
-    if area.width < 60 || area.height < 20 {
+    if area.width < crate::app::MIN_WIDTH || area.height < crate::app::MIN_HEIGHT {
         f.render_widget(
             Paragraph::new(Span::styled(
-                "terminal too small  (min 60×20)",
+                format!(
+                    "terminal too small  (min {}×{})",
+                    crate::app::MIN_WIDTH,
+                    crate::app::MIN_HEIGHT
+                ),
                 Style::default().fg(C_DIM),
             ))
             .alignment(Alignment::Center),

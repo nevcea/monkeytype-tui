@@ -58,8 +58,10 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
     let mut app = App::new();
 
     loop {
-        // Track terminal width for scroll calculations
-        app.last_width = terminal.size()?.width;
+        // Track terminal size for scroll and layout calculations
+        let size = terminal.size()?;
+        app.last_width = size.width;
+        app.last_height = size.height;
 
         terminal.draw(|f| ui::draw(f, &app))?;
 
@@ -71,11 +73,13 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
         };
         execute!(terminal.backend_mut(), cursor_style)?;
 
-        if event::poll(Duration::from_millis(50))?
-            && let Event::Key(key) = event::read()?
-            && key.kind == KeyEventKind::Press
-        {
-            app.on_key(key);
+        if event::poll(Duration::from_millis(50))? {
+            match event::read()? {
+                Event::Key(key) if key.kind == KeyEventKind::Press => app.on_key(key),
+                // Redraw immediately on resize instead of waiting for the poll timeout.
+                Event::Resize(_, _) => continue,
+                _ => {}
+            }
         }
 
         app.tick();

@@ -191,6 +191,9 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             sep(),
             kh("ctrl+bksp"),
             Span::raw(" word"),
+            sep(),
+            kh("ctrl+c"),
+            Span::raw(" quit"),
         ]))
         .style(Style::default().fg(C_DIM))
         .alignment(Alignment::Center),

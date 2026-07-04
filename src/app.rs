@@ -18,6 +18,10 @@ pub enum Screen {
     Settings,
 }
 
+/// Minimum terminal size the UI renders at; below this `ui::draw` shows a hint.
+pub const MIN_WIDTH: u16 = 60;
+pub const MIN_HEIGHT: u16 = 20;
+
 pub const TIME_OPTIONS: &[u64] = &[15, 30, 60, 120];
 pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100];
 pub const LANG_PICKER_VISIBLE: usize = 12;
@@ -86,6 +90,7 @@ pub struct App {
     pub lang_picker: Option<LangPicker>,
     pub scroll_word: usize,
     pub last_width: u16,
+    pub last_height: u16,
     pub history: Vec<HistoryEntry>,
     pub history_scroll: usize,
     pub should_quit: bool,
@@ -121,6 +126,7 @@ impl App {
             lang_picker: None,
             scroll_word: 0,
             last_width: 80,
+            last_height: 24,
             history: history::load_history(history_expiry),
             history_scroll: 0,
             should_quit: false,
@@ -696,7 +702,17 @@ impl App {
 
     // ── test ─────────────────────────────────────────────────────────────────
 
+    /// True when the terminal is below the renderable minimum (see `ui::draw`).
+    pub fn too_small(&self) -> bool {
+        self.last_width < MIN_WIDTH || self.last_height < MIN_HEIGHT
+    }
+
     fn handle_test(&mut self, key: KeyEvent) {
+        // The test screen is hidden behind the too-small overlay; ignore typing
+        // so keystrokes aren't recorded blindly. Esc still lets the user leave.
+        if self.too_small() && key.code != KeyCode::Esc {
+            return;
+        }
         match key.code {
             KeyCode::Esc => {
                 if self.game.started_at.is_some() {
