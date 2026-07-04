@@ -9,13 +9,13 @@
 ## Highlights
 
 - 🖥️ **No browser, no Electron** — runs entirely in your terminal
-- ⏱️ **Three modes** — Time (5s–custom), Words (10–500, custom), Quote
+- ⏱️ **Three modes** — Time (15/30/60/120s, custom up to 3600s), Words (10/25/50/100, custom up to 5000), Quote (with a length filter: short/medium/long/thicc)
 - 🌍 **48 languages** with word lists embedded at compile time; quotes in 38 languages
-- 🎯 **Three difficulty levels** — Normal, Expert (any error resets), Master (space errors reset)
+- 🎯 **Three difficulty levels** — Normal, Expert (any mistake fails the test), Master (fails if the word you just finished had a mistake in it); any run also fails below 75% accuracy
 - 📊 **WPM, raw WPM, and accuracy** on every result screen, with personal best tracking
 - 💾 **Persistent history** — last 50 results saved to `~/.local/share/monkeytype-tui/history.json`
 - 🔍 **Language picker** with fuzzy search
-- ⚙️ **Settings screen** — toggle sound, cursor shape, punctuation, numbers, and difficulty
+- ⚙️ **Settings screen** — cursor shape, sound & volume, history expiry, and difficulty (punctuation/numbers toggle from the menu instead)
 
 ## Overview
 
@@ -39,37 +39,58 @@ cargo run --release
 
 ## Usage
 
-Launch the app and use `↑`/`↓` to pick a mode, then press `Enter` to start typing.
+Launch the app, use `1`/`2`/`3` to pick Time / Words / Quote, `←`/`→` to change the option (or cycle the quote length filter in Quote mode), then press `Enter`/`Tab` to start typing.
 
 **Menu**
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Navigate |
-| `←` / `→` | Change mode option |
 | `1` / `2` / `3` | Switch to Time / Words / Quote mode |
-| `Enter` | Start test |
+| `←` / `→` | Change mode option (or quote length filter in Quote mode) |
+| `Enter` / `Tab` | Start test (opens a custom number prompt if the "custom" slot is selected) |
 | `p` / `n` | Toggle punctuation / numbers |
-| `l` | Open language picker |
+| `l` | Open language picker (fuzzy search, `←`/`→` change word-pool size) |
 | `h` | Open history |
 | `s` | Open settings |
 | `?` | Open help |
-| `Ctrl+C` / `q` | Quit |
+| `Ctrl+C` | Quit immediately |
+| `q` / `Esc` | Quit (asks for confirmation) |
 
 **During a test**
 
 | Key | Action |
 |-----|--------|
-| `Tab` | Restart |
-| `Esc` | Back to menu |
+| `Tab` | Restart with new words |
+| `Backspace` | Delete last character |
+| `Ctrl+Backspace` | Delete last word |
+| `Esc` | Back to menu (asks for confirmation once typing has started) |
 
 **Result screen**
 
 | Key | Action |
 |-----|--------|
-| `r` | Restart same test |
-| `Enter` / `Tab` | New test (back to menu) |
+| `r` | Repeat the same words |
+| `Enter` / `Tab` | New test with fresh words |
 | `Esc` | Back to menu |
+
+**Settings screen**
+
+Rows: cursor shape, sound, volume, history expiry, difficulty.
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Move between rows |
+| `←` / `→` | Change the selected row's value |
+| `0`-`9` / `Backspace` | Type an exact volume percentage (when on the volume row) |
+| `Enter` | Save and return to menu |
+| `Esc` | Return to menu (asks `y`/`n` to discard first if there are unsaved changes) |
+
+**History screen**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Scroll |
+| `Esc` / `q` | Back to menu |
 
 ## Supported Languages
 
