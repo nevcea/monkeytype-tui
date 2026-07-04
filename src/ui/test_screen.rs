@@ -12,12 +12,15 @@ use crate::words::LANGUAGES;
 
 use super::*;
 
+/// Upper bound on word-display lines so very tall terminals stay readable.
+const WORD_LINES_MAX: usize = 7;
+
 pub(super) fn draw_test(f: &mut Frame, app: &App) {
     let area = f.area();
     let [header_a, _, words_a, _, stats_a, _] = Layout::vertical([
         Constraint::Length(1), // gauge / counter
         Constraint::Length(1), // gap
-        Constraint::Length(3), // 3-line word display
+        Constraint::Min(3),    // word display (grows with terminal height)
         Constraint::Length(1), // gap
         Constraint::Length(1), // live wpm/acc
         Constraint::Length(1), // key hints
@@ -79,12 +82,23 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
     }
 
     // ── word display ──
-    let words_inner = horiz_pad(words_a, pad);
+    // The scroll keeps the cursor line at the top row, so the extra lines simply
+    // show more upcoming context. Cap the count so tall terminals stay focused,
+    // and vertically center the block in the available area.
+    let words_area = horiz_pad(words_a, pad);
+    let visible = (words_area.height as usize).clamp(1, WORD_LINES_MAX);
+    let block_h = visible as u16;
+    let words_inner = Rect {
+        x: words_area.x,
+        y: words_area.y + words_area.height.saturating_sub(block_h) / 2,
+        width: words_area.width,
+        height: block_h,
+    };
     let inner_w = words_inner.width as usize;
     let lines = word_lines(&app.game.words, app.scroll_word, inner_w.max(1));
 
-    let sub = Layout::vertical([Constraint::Length(1); 3]).split(words_inner);
-    for (i, word_idxs) in lines.iter().take(3).enumerate() {
+    let sub = Layout::vertical(vec![Constraint::Length(1); visible]).split(words_inner);
+    for (i, word_idxs) in lines.iter().take(visible).enumerate() {
         let is_active = i == 0;
         let cursor_shape = if is_active {
             Some(app.settings.cursor_shape)
@@ -97,7 +111,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
 
     if !app.game.is_finished() {
         let cursor_word = app.game.word_at_cursor();
-        for (row, word_idxs) in lines.iter().take(3).enumerate() {
+        for (row, word_idxs) in lines.iter().take(visible).enumerate() {
             if word_idxs.is_empty() {
                 continue;
             }
@@ -171,6 +185,12 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
                 Span::styled("   ", Style::default()),
                 Span::styled(format!("{acc:.1}%"), Style::default().fg(C_FG)),
                 Span::styled(" acc", Style::default().fg(C_DIM)),
+                Span::styled("   ", Style::default()),
+                Span::styled(
+                    format!("{}", app.game.error_keystrokes),
+                    Style::default().fg(C_WRONG),
+                ),
+                Span::styled(" err", Style::default().fg(C_DIM)),
             ]))
             .alignment(Alignment::Center),
             stats_a,
