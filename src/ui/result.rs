@@ -63,14 +63,14 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
         return;
     };
 
-    let wpm_color = if failed { C_WRONG } else { C_ACCENT };
+    let wpm_color = if failed { th_wrong() } else { th_accent() };
     let wpm_line = if app.is_new_pb && !failed {
         Line::from(vec![
             Span::styled(
                 format!("{wpm:.0}"),
                 Style::default().fg(wpm_color).add_modifier(Modifier::BOLD),
             ),
-            Span::styled(" ★", Style::default().fg(C_ACCENT)),
+            Span::styled(" ★", Style::default().fg(th_accent())),
         ])
     } else {
         Line::from(Span::styled(
@@ -84,18 +84,18 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
     };
     f.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled("wpm", Style::default().fg(C_DIM))),
+            Line::from(Span::styled("wpm", Style::default().fg(th_dim()))),
             wpm_line,
         ]),
         lwpm_a,
     );
     f.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled("acc", Style::default().fg(C_DIM))),
+            Line::from(Span::styled("acc", Style::default().fg(th_dim()))),
             Line::from(Span::styled(
                 format!("{acc:.1}%"),
                 Style::default()
-                    .fg(if failed { C_WRONG } else { C_ACCENT })
+                    .fg(if failed { th_wrong() } else { th_accent() })
                     .add_modifier(Modifier::BOLD),
             )),
         ]),
@@ -103,29 +103,29 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
     );
     let diff = app.game.settings.difficulty;
     let mut type_lines = vec![
-        Line::from(Span::styled("test type", Style::default().fg(C_DIM))),
-        Line::from(Span::styled(mode_str, Style::default().fg(C_ACCENT))),
-        Line::from(Span::styled(lang, Style::default().fg(C_ACCENT))),
+        Line::from(Span::styled("test type", Style::default().fg(th_dim()))),
+        Line::from(Span::styled(mode_str, Style::default().fg(th_accent()))),
+        Line::from(Span::styled(lang, Style::default().fg(th_accent()))),
     ];
     if diff != crate::game::Difficulty::Normal {
         type_lines.push(Line::from(Span::styled(
             diff.label(),
-            Style::default().fg(C_ACCENT),
+            Style::default().fg(th_accent()),
         )));
     }
     if let Some(reason) = app.game.fail_reason() {
         type_lines.push(Line::from(Span::styled(
             format!("invalid ({reason})"),
-            Style::default().fg(C_WRONG),
+            Style::default().fg(th_wrong()),
         )));
     }
     f.render_widget(Paragraph::new(type_lines), ltype_a);
     f.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled("raw", Style::default().fg(C_DIM))),
+            Line::from(Span::styled("raw", Style::default().fg(th_dim()))),
             Line::from(Span::styled(
                 format!("{raw:.0}"),
-                Style::default().fg(C_FG).add_modifier(Modifier::BOLD),
+                Style::default().fg(th_fg()).add_modifier(Modifier::BOLD),
             )),
         ]),
         lraw_a,
@@ -135,7 +135,7 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
             Paragraph::new(Span::styled(
                 format!("— {src}"),
                 Style::default()
-                    .fg(C_PENDING)
+                    .fg(th_pending())
                     .add_modifier(Modifier::ITALIC),
             )),
             src_a,
@@ -172,10 +172,12 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
 
     f.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled("characters", Style::default().fg(C_DIM))),
+            Line::from(Span::styled("characters", Style::default().fg(th_dim()))),
             Line::from(Span::styled(
                 format!("{correct}/{wrong}"),
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD),
             )),
         ])
         .alignment(Alignment::Right),
@@ -183,10 +185,12 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
     );
     f.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled("consistency", Style::default().fg(C_DIM))),
+            Line::from(Span::styled("consistency", Style::default().fg(th_dim()))),
             Line::from(Span::styled(
                 format!("{cons:.0}%"),
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD),
             )),
         ])
         .alignment(Alignment::Right),
@@ -196,10 +200,12 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
     let afk = app.game.afk_secs;
     f.render_widget(
         Paragraph::new(vec![
-            Line::from(Span::styled("time", Style::default().fg(C_DIM))),
+            Line::from(Span::styled("time", Style::default().fg(th_dim()))),
             Line::from(Span::styled(
                 format!("{elapsed:.1}s"),
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD),
             )),
             Line::from(Span::styled(
                 format!(
@@ -208,7 +214,7 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
                     session_secs % 3600 / 60,
                     session_secs % 60
                 ),
-                Style::default().fg(C_DIM),
+                Style::default().fg(th_dim()),
             )),
             Line::from(Span::styled(
                 format!(
@@ -219,7 +225,7 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
                         0.0
                     }
                 ),
-                Style::default().fg(C_DIM),
+                Style::default().fg(th_dim()),
             )),
         ])
         .alignment(Alignment::Right),
@@ -281,21 +287,21 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
         .map(|i| {
             Line::from(Span::styled(
                 format!("{:.0}", y_max * i as f64 / 4.0),
-                Style::default().fg(C_DIM),
+                Style::default().fg(th_dim()),
             ))
         })
         .collect();
     let x_labels = vec![
-        Line::from(Span::styled("1", Style::default().fg(C_DIM))),
+        Line::from(Span::styled("1", Style::default().fg(th_dim()))),
         Line::from(Span::styled(
             if n <= 2 {
                 String::new()
             } else {
                 format!("{}", n / 2)
             },
-            Style::default().fg(C_DIM),
+            Style::default().fg(th_dim()),
         )),
-        Line::from(Span::styled(format!("{n}"), Style::default().fg(C_DIM))),
+        Line::from(Span::styled(format!("{n}"), Style::default().fg(th_dim()))),
     ];
 
     // Distinct markers per series so the lines are also distinguishable by
@@ -304,12 +310,12 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
         Dataset::default()
             .marker(symbols::Marker::Braille)
             .graph_type(GraphType::Line)
-            .style(Style::default().fg(C_PENDING))
+            .style(Style::default().fg(th_pending()))
             .data(&burst_data),
         Dataset::default()
             .marker(symbols::Marker::Dot)
             .graph_type(GraphType::Line)
-            .style(Style::default().fg(C_SUB))
+            .style(Style::default().fg(th_sub()))
             .data(&raw_data),
     ];
     if scale_data.len() >= 2 {
@@ -317,7 +323,7 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
             Dataset::default()
                 .marker(symbols::Marker::Block)
                 .graph_type(GraphType::Line)
-                .style(Style::default().fg(C_ACCENT))
+                .style(Style::default().fg(th_accent()))
                 .data(&scale_data),
         );
     }
@@ -326,7 +332,7 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
             Dataset::default()
                 .marker(symbols::Marker::Dot)
                 .graph_type(GraphType::Scatter)
-                .style(Style::default().fg(C_WRONG))
+                .style(Style::default().fg(th_wrong()))
                 .data(&err_data),
         );
     }
@@ -336,23 +342,23 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
             Axis::default()
                 .bounds([0.0, x_max])
                 .labels(x_labels)
-                .style(Style::default().fg(C_DIM)),
+                .style(Style::default().fg(th_dim())),
         )
         .y_axis(
             Axis::default()
                 .bounds([0.0, y_max])
                 .labels(y_labels)
-                .style(Style::default().fg(C_DIM)),
+                .style(Style::default().fg(th_dim())),
         );
 
     f.render_widget(chart, chart_body_a);
 
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("─ burst  ", Style::default().fg(C_PENDING)),
-            Span::styled("⋯ raw  ", Style::default().fg(C_SUB)),
-            Span::styled("▬ scale  ", Style::default().fg(C_ACCENT)),
-            Span::styled("• errors", Style::default().fg(C_WRONG)),
+            Span::styled("─ burst  ", Style::default().fg(th_pending())),
+            Span::styled("⋯ raw  ", Style::default().fg(th_sub())),
+            Span::styled("▬ scale  ", Style::default().fg(th_accent())),
+            Span::styled("• errors", Style::default().fg(th_wrong())),
         ]))
         .alignment(Alignment::Center),
         legend_a,
@@ -371,7 +377,7 @@ fn draw_footer(f: &mut Frame, area: Rect) {
             kh("esc"),
             Span::raw(" menu"),
         ]))
-        .style(Style::default().fg(C_DIM))
+        .style(Style::default().fg(th_dim()))
         .alignment(Alignment::Center),
         area,
     );

@@ -22,7 +22,7 @@ paths:
 |---|---|
 | `app.rs` | `App` struct: all UI state, input routing, screen transitions. Contains `word_lines()` used by both `app` and `ui` |
 | `game.rs` | `GameState`: pure typing logic (WPM/accuracy/timers). No I/O |
-| `ui/mod.rs` | Entry point (`draw()`) that dispatches to per-screen submodules based on `App::screen`. Holds shared palette constants and layout helpers used across screens. Reads `App` + `GameState`, never mutates them |
+| `ui/mod.rs` | Entry point (`draw()`) that dispatches to per-screen submodules based on `App::screen`. Holds the `Theme` palette (selected via `Settings::theme_idx`, applied per-frame through `th_*()` accessors) and layout helpers. Reads `App` + `GameState`, never mutates them |
 | `ui/{menu,test_screen,result,history,help,settings}.rs` | One file per screen (`draw_menu`, `draw_test`, etc.), plus `help.rs` for the language picker overlay |
 | `words.rs` | `LANGUAGES` static: word lists embedded at compile time via `include_str!`, cached per (lang, size). Also contains `load_quotes_for` |
 | `pb.rs` | Personal best persistence (keyed by mode+lang) to `pb.json` |

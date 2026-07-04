@@ -43,7 +43,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             };
             f.render_widget(
                 Gauge::default()
-                    .gauge_style(Style::default().fg(C_ACCENT).bg(C_GAUGE_BG))
+                    .gauge_style(Style::default().fg(th_accent()).bg(th_gauge_bg()))
                     .ratio(ratio.clamp(0.0, 1.0))
                     .label(if app.game.started_at.is_none() {
                         format!("{total}s")
@@ -62,7 +62,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             };
             f.render_widget(
                 Gauge::default()
-                    .gauge_style(Style::default().fg(C_ACCENT).bg(C_GAUGE_BG))
+                    .gauge_style(Style::default().fg(th_accent()).bg(th_gauge_bg()))
                     .ratio(ratio)
                     .label(format!("{label} / {total}")),
                 gauge_area,
@@ -73,7 +73,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             let done = app.game.cursor;
             f.render_widget(
                 Gauge::default()
-                    .gauge_style(Style::default().fg(C_ACCENT).bg(C_GAUGE_BG))
+                    .gauge_style(Style::default().fg(th_accent()).bg(th_gauge_bg()))
                     .ratio((done as f64 / total.max(1) as f64).clamp(0.0, 1.0))
                     .label(format!("{done} / {total}")),
                 gauge_area,
@@ -145,7 +145,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
         f.render_widget(
             Paragraph::new(Span::styled(
                 "start typing…",
-                Style::default().fg(C_DIM).add_modifier(Modifier::ITALIC),
+                Style::default().fg(th_dim()).add_modifier(Modifier::ITALIC),
             ))
             .alignment(Alignment::Center),
             hint_area,
@@ -166,8 +166,8 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             .unwrap_or("english");
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled(mode_label, Style::default().fg(C_DIM)),
-                Span::styled(format!("  ·  {lang}"), Style::default().fg(C_DIM)),
+                Span::styled(mode_label, Style::default().fg(th_dim())),
+                Span::styled(format!("  ·  {lang}"), Style::default().fg(th_dim())),
             ]))
             .alignment(Alignment::Center),
             stats_a,
@@ -179,18 +179,20 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             Paragraph::new(Line::from(vec![
                 Span::styled(
                     format!("{wpm:.0}"),
-                    Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(th_accent())
+                        .add_modifier(Modifier::BOLD),
                 ),
-                Span::styled(" wpm", Style::default().fg(C_DIM)),
+                Span::styled(" wpm", Style::default().fg(th_dim())),
                 Span::styled("   ", Style::default()),
-                Span::styled(format!("{acc:.1}%"), Style::default().fg(C_FG)),
-                Span::styled(" acc", Style::default().fg(C_DIM)),
+                Span::styled(format!("{acc:.1}%"), Style::default().fg(th_fg())),
+                Span::styled(" acc", Style::default().fg(th_dim())),
                 Span::styled("   ", Style::default()),
                 Span::styled(
                     format!("{}", app.game.error_keystrokes),
-                    Style::default().fg(C_WRONG),
+                    Style::default().fg(th_wrong()),
                 ),
-                Span::styled(" err", Style::default().fg(C_DIM)),
+                Span::styled(" err", Style::default().fg(th_dim())),
             ]))
             .alignment(Alignment::Center),
             stats_a,
@@ -215,7 +217,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             kh("ctrl+c"),
             Span::raw(" quit"),
         ]))
-        .style(Style::default().fg(C_DIM))
+        .style(Style::default().fg(th_dim()))
         .alignment(Alignment::Center),
         footer_a,
     );
@@ -268,22 +270,24 @@ fn char_style(state: CharState, dim_pending: bool, cursor_shape: Option<CursorSh
     match state {
         // Bold gives correct chars a non-color cue vs. pending, for low-vision /
         // monochrome terminals where the brightness difference is hard to read.
-        CharState::Correct => Style::default().fg(C_CORRECT).add_modifier(Modifier::BOLD),
+        CharState::Correct => Style::default()
+            .fg(th_correct())
+            .add_modifier(Modifier::BOLD),
         CharState::Wrong => {
             let s = Style::default()
-                .fg(C_WRONG)
+                .fg(th_wrong())
                 .add_modifier(Modifier::UNDERLINED);
-            if dim_pending { s } else { s.bg(C_WRONG_BG) }
+            if dim_pending { s } else { s.bg(th_wrong_bg()) }
         }
         CharState::Current => match cursor_shape {
-            Some(CursorShape::Block) | None => Style::default().fg(BG).bg(C_ACCENT),
+            Some(CursorShape::Block) | None => Style::default().fg(th_bg()).bg(th_accent()),
             Some(CursorShape::Underline) => Style::default()
-                .fg(C_ACCENT)
+                .fg(th_accent())
                 .add_modifier(Modifier::UNDERLINED),
-            Some(CursorShape::Bar) => Style::default().fg(C_ACCENT),
+            Some(CursorShape::Bar) => Style::default().fg(th_accent()),
         },
         CharState::Pending => {
-            let color = if dim_pending { C_DIM } else { C_PENDING };
+            let color = if dim_pending { th_dim() } else { th_pending() };
             Style::default().fg(color)
         }
     }

@@ -47,7 +47,9 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
     f.render_widget(
         Paragraph::new(Span::styled(
             "monkeytype",
-            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(th_accent())
+                .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
         title_a,
@@ -119,11 +121,14 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
                         spans.push(Span::styled(
                             filter.label(),
                             Style::default()
-                                .fg(C_ACCENT)
+                                .fg(th_accent())
                                 .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
                         ));
                     } else {
-                        spans.push(Span::styled(filter.label(), Style::default().fg(C_PENDING)));
+                        spans.push(Span::styled(
+                            filter.label(),
+                            Style::default().fg(th_pending()),
+                        ));
                     }
                     if i + 1 < filters.len() {
                         spans.push(Span::raw("  "));
@@ -133,7 +138,7 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
             } else {
                 Line::from(Span::styled(
                     "no quotes available for this language",
-                    Style::default().fg(C_WRONG),
+                    Style::default().fg(th_wrong()),
                 ))
             }
         }
@@ -144,7 +149,7 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
             opts_line,
             Line::from(Span::styled(
                 "type a number and press enter",
-                Style::default().fg(C_DIM),
+                Style::default().fg(th_dim()),
             )),
         ])
         .alignment(Alignment::Center)
@@ -158,14 +163,14 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         .unwrap_or(&LANGUAGES[0]);
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled("language  ", Style::default().fg(C_DIM)),
+            Span::styled("language  ", Style::default().fg(th_dim())),
             Span::styled(
                 lang.name,
-                Style::default().fg(C_FG).add_modifier(Modifier::BOLD),
+                Style::default().fg(th_fg()).add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!("  {}/{}", app.settings.lang_idx + 1, LANGUAGES.len()),
-                Style::default().fg(C_DIM),
+                Style::default().fg(th_dim()),
             ),
         ]))
         .alignment(Alignment::Center),
@@ -181,11 +186,11 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
                 Span::styled(
                     sz.label,
                     Style::default()
-                        .fg(C_ACCENT)
+                        .fg(th_accent())
                         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
                 )
             } else {
-                Span::styled(sz.label, Style::default().fg(C_PENDING))
+                Span::styled(sz.label, Style::default().fg(th_pending()))
             };
             if i + 1 < lang.sizes.len() {
                 vec![span, Span::raw("  ")]

@@ -27,8 +27,9 @@ pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100];
 pub const LANG_PICKER_VISIBLE: usize = 12;
 const CUSTOM_INPUT_MAX_LEN: usize = 5;
 
-/// Settings-screen rows (cursor shape, sound, volume, history expiry, difficulty).
-const SETTINGS_ROWS: usize = 5;
+/// Settings-screen rows (cursor shape, sound, volume, history expiry,
+/// difficulty, theme).
+const SETTINGS_ROWS: usize = 6;
 const SETTINGS_ROW_VOLUME: usize = 2;
 const DEFAULT_VOLUME_PCT: u8 = 25;
 const VOLUME_STEP: u8 = 5;
@@ -610,6 +611,14 @@ impl App {
                     self.settings.difficulty.prev()
                 } else {
                     self.settings.difficulty.next()
+                };
+            }
+            5 => {
+                let n = crate::ui::THEMES.len();
+                self.settings.theme_idx = if rev {
+                    (self.settings.theme_idx + n - 1) % n
+                } else {
+                    (self.settings.theme_idx + 1) % n
                 };
             }
             _ => {}

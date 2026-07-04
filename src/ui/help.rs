@@ -27,18 +27,20 @@ pub(super) fn draw_help(f: &mut Frame) {
     f.render_widget(
         Paragraph::new(Span::styled(
             "help",
-            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(th_accent())
+                .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
         title_a,
     );
 
-    let kw = |k: &'static str| Span::styled(format!("{k:<16}"), Style::default().fg(C_ACCENT));
-    let dsc = |d: &'static str| Span::styled(d, Style::default().fg(C_FG));
+    let kw = |k: &'static str| Span::styled(format!("{k:<16}"), Style::default().fg(th_accent()));
+    let dsc = |d: &'static str| Span::styled(d, Style::default().fg(th_fg()));
     let sec = |s: &'static str| {
         Line::from(Span::styled(
             s,
-            Style::default().fg(C_DIM).add_modifier(Modifier::BOLD),
+            Style::default().fg(th_dim()).add_modifier(Modifier::BOLD),
         ))
     };
     let row = |k, d| Line::from(vec![kw(k), dsc(d)]);
@@ -79,7 +81,7 @@ pub(super) fn draw_help(f: &mut Frame) {
 
     f.render_widget(
         Paragraph::new(Line::from(vec![kh("esc"), Span::raw(" back")]))
-            .style(Style::default().fg(C_DIM))
+            .style(Style::default().fg(th_dim()))
             .alignment(Alignment::Center),
         pin_footer(f.area(), 1),
     );
@@ -100,12 +102,14 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
     f.render_widget(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(C_DIM))
+            .border_style(Style::default().fg(th_dim()))
             .title(Span::styled(
                 " language ",
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD),
             ))
-            .style(Style::default().bg(BG)),
+            .style(Style::default().bg(th_bg())),
         area,
     );
 
@@ -129,10 +133,13 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
 
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            Span::styled(format!("▶ {}_", picker.search), Style::default().fg(C_FG)),
+            Span::styled(
+                format!("▶ {}_", picker.search),
+                Style::default().fg(th_fg()),
+            ),
             Span::styled(
                 format!(" ({}/{})", filtered.len(), LANGUAGES.len()),
-                Style::default().fg(C_DIM),
+                Style::default().fg(th_dim()),
             ),
         ])),
         search_a,
@@ -146,25 +153,27 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
         .map(|(fi, (_, lang))| {
             let selected = fi == picker.cursor;
             let name_style = if selected {
-                Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(C_FG)
+                Style::default().fg(th_fg())
             };
             let prefix = if selected { "▶ " } else { "  " };
 
             let mut spans = vec![
-                Span::styled(prefix, Style::default().fg(C_ACCENT)),
+                Span::styled(prefix, Style::default().fg(th_accent())),
                 Span::styled(format!("{:<12}", lang.name), name_style),
                 Span::styled("  ", Style::default()),
             ];
 
             for (si, sz) in lang.sizes.iter().enumerate() {
                 let size_style = if selected && si == picker.size_idx {
-                    Style::default().fg(BG).bg(C_ACCENT)
+                    Style::default().fg(th_bg()).bg(th_accent())
                 } else if selected {
-                    Style::default().fg(C_PENDING)
+                    Style::default().fg(th_pending())
                 } else {
-                    Style::default().fg(C_DIM)
+                    Style::default().fg(th_dim())
                 };
                 spans.push(Span::styled(sz.label, size_style));
                 if si + 1 < lang.sizes.len() {
@@ -172,7 +181,7 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
                 }
             }
             if matches!(app.menu_mode, Mode::Quote) && lang.quotes.is_none() {
-                spans.push(Span::styled("  no quotes", Style::default().fg(C_WRONG)));
+                spans.push(Span::styled("  no quotes", Style::default().fg(th_wrong())));
             }
             Line::from(spans)
         })
@@ -200,9 +209,9 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
             sep(),
             kh("esc"),
             Span::raw(" cancel"),
-            Span::styled(scroll_info, Style::default().fg(C_DIM)),
+            Span::styled(scroll_info, Style::default().fg(th_dim())),
         ]))
-        .style(Style::default().fg(C_DIM))
+        .style(Style::default().fg(th_dim()))
         .alignment(Alignment::Center),
         footer_a,
     );

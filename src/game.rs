@@ -103,6 +103,7 @@ pub struct Settings {
     pub history_expiry: HistoryExpiry,
     pub difficulty: Difficulty,
     pub quote_filter: QuoteFilter,
+    pub theme_idx: usize,
 }
 
 pub struct GameState {

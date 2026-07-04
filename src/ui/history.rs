@@ -28,7 +28,9 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
     f.render_widget(
         Paragraph::new(Span::styled(
             "history",
-            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(th_accent())
+                .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
         title_a,
@@ -39,17 +41,17 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
         let avg = app.history.iter().map(|e| e.wpm).sum::<f64>() / app.history.len() as f64;
         f.render_widget(
             Paragraph::new(Line::from(vec![
-                Span::styled("best ", Style::default().fg(C_DIM)),
-                Span::styled(format!("{best:.0}"), Style::default().fg(C_FG)),
-                Span::styled(" wpm", Style::default().fg(C_DIM)),
+                Span::styled("best ", Style::default().fg(th_dim())),
+                Span::styled(format!("{best:.0}"), Style::default().fg(th_fg())),
+                Span::styled(" wpm", Style::default().fg(th_dim())),
                 Span::styled("     ", Style::default()),
-                Span::styled("avg ", Style::default().fg(C_DIM)),
-                Span::styled(format!("{avg:.0}"), Style::default().fg(C_FG)),
-                Span::styled(" wpm", Style::default().fg(C_DIM)),
+                Span::styled("avg ", Style::default().fg(th_dim())),
+                Span::styled(format!("{avg:.0}"), Style::default().fg(th_fg())),
+                Span::styled(" wpm", Style::default().fg(th_dim())),
                 Span::styled("     ", Style::default()),
                 Span::styled(
                     format!("{} tests", app.history.len()),
-                    Style::default().fg(C_DIM),
+                    Style::default().fg(th_dim()),
                 ),
             ]))
             .alignment(Alignment::Center),
@@ -59,11 +61,11 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
 
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            col("wpm", 6, C_DIM),
-            col("acc", 7, C_DIM),
-            col("lang", 11, C_DIM),
-            col("mode", 10, C_DIM),
-            col("when", 10, C_DIM),
+            col("wpm", 6, th_dim()),
+            col("acc", 7, th_dim()),
+            col("lang", 11, th_dim()),
+            col("mode", 10, th_dim()),
+            col("when", 10, th_dim()),
         ])),
         header_a,
     );
@@ -72,7 +74,7 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
     let lines: Vec<Line> = if app.history.is_empty() {
         vec![Line::from(Span::styled(
             "no results yet",
-            Style::default().fg(C_DIM),
+            Style::default().fg(th_dim()),
         ))]
     } else {
         app.history
@@ -81,8 +83,8 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
             .take(max_rows)
             .map(|e| {
                 Line::from(vec![
-                    col(format!("{:.0}", e.wpm), 6, C_ACCENT),
-                    col(format!("{:.1}%", e.accuracy), 7, C_FG),
+                    col(format!("{:.0}", e.wpm), 6, th_accent()),
+                    col(format!("{:.1}%", e.accuracy), 7, th_fg()),
                     col(
                         if e.language.is_empty() {
                             "—".to_string()
@@ -90,10 +92,10 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
                             e.language.clone()
                         },
                         11,
-                        C_PENDING,
+                        th_pending(),
                     ),
-                    col(&e.mode, 10, C_FG),
-                    col(e.time_ago(), 10, C_PENDING),
+                    col(&e.mode, 10, th_fg()),
+                    col(e.time_ago(), 10, th_pending()),
                 ])
             })
             .collect()
@@ -113,9 +115,9 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
             sep(),
             kh("esc"),
             Span::raw(" back"),
-            Span::styled(scroll_hint, Style::default().fg(C_DIM)),
+            Span::styled(scroll_hint, Style::default().fg(th_dim())),
         ]))
-        .style(Style::default().fg(C_DIM))
+        .style(Style::default().fg(th_dim()))
         .alignment(Alignment::Center),
         pin_footer(f.area(), 1),
     );

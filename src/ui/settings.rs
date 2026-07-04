@@ -40,6 +40,15 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
             app.settings.difficulty.label().into(),
             app.settings.difficulty != crate::game::Difficulty::Normal,
         ),
+        (
+            "theme",
+            THEMES
+                .get(app.settings.theme_idx)
+                .unwrap_or(&THEMES[0])
+                .name
+                .into(),
+            app.settings.theme_idx != 0,
+        ),
     ];
 
     let height = (rows.len() + 5) as u16;
@@ -55,8 +64,8 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
     f.render_widget(
         Block::default()
             .borders(Borders::ALL)
-            .border_style(Style::default().fg(C_DIM))
-            .style(Style::default().bg(BG)),
+            .border_style(Style::default().fg(th_dim()))
+            .style(Style::default().bg(th_bg())),
         area,
     );
 
@@ -76,7 +85,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         return;
     };
 
-    let changed: [bool; 5] = if let Some((snap, snap_pack, snap_vol)) = &app.settings_state.snapshot
+    let changed: [bool; 6] = if let Some((snap, snap_pack, snap_vol)) = &app.settings_state.snapshot
     {
         [
             app.settings.cursor_shape != snap.cursor_shape,
@@ -90,9 +99,10 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
                 .unwrap_or(false),
             app.settings.history_expiry != snap.history_expiry,
             app.settings.difficulty != snap.difficulty,
+            app.settings.theme_idx != snap.theme_idx,
         ]
     } else {
-        [false; 5]
+        [false; 6]
     };
     let title = if changed.iter().any(|&c| c) {
         "settings [*]"
@@ -102,7 +112,9 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
     f.render_widget(
         Paragraph::new(Span::styled(
             title,
-            Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(th_accent())
+                .add_modifier(Modifier::BOLD),
         ))
         .alignment(Alignment::Center),
         title_a,
@@ -114,22 +126,24 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         .map(|(i, (label, val, active))| {
             let unavailable = (i == 3 || i == 4) && app.sound.is_none();
             let cursor = if i == app.settings_state.cursor && !unavailable {
-                Span::styled("> ", Style::default().fg(C_ACCENT))
+                Span::styled("> ", Style::default().fg(th_accent()))
             } else {
                 Span::raw("  ")
             };
-            let lbl = Span::styled(format!("{label:<label_w$}"), Style::default().fg(C_DIM));
+            let lbl = Span::styled(format!("{label:<label_w$}"), Style::default().fg(th_dim()));
             let val_span = if i == app.settings_state.cursor && !unavailable {
                 Span::styled(
                     format!("< {val} >"),
-                    Style::default().fg(C_ACCENT).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(th_accent())
+                        .add_modifier(Modifier::BOLD),
                 )
             } else {
                 toggle_span(val, *active)
             };
             let dirty = Span::styled(
                 if changed[i] { " *" } else { "  " },
-                Style::default().fg(C_DIM),
+                Style::default().fg(th_dim()),
             );
             Line::from(vec![cursor, lbl, val_span, dirty])
         })
@@ -139,14 +153,14 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
 
     let footer = if app.settings_state.pending_exit {
         Paragraph::new(Line::from(vec![
-            Span::styled("discard changes?  ", Style::default().fg(C_WRONG)),
+            Span::styled("discard changes?  ", Style::default().fg(th_wrong())),
             kh("y"),
-            Span::styled(" yes", Style::default().fg(C_WRONG)),
+            Span::styled(" yes", Style::default().fg(th_wrong())),
             sep(),
             kh("n"),
             Span::raw(" no"),
         ]))
-        .style(Style::default().fg(C_DIM))
+        .style(Style::default().fg(th_dim()))
         .alignment(Alignment::Center)
     } else {
         let any_changed = changed.iter().any(|&c| c);
@@ -163,7 +177,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
             spans.extend([sep(), kh("esc"), Span::raw(" discard")]);
         }
         Paragraph::new(Line::from(spans))
-            .style(Style::default().fg(C_DIM))
+            .style(Style::default().fg(th_dim()))
             .alignment(Alignment::Center)
     };
     f.render_widget(footer, pin_footer(f.area(), 1));
