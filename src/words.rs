@@ -494,3 +494,43 @@ pub fn load_quotes_for(lang: &str) -> Vec<QuoteEntry> {
     }
     quotes
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_word_lists_parse() {
+        // load_words degrades to an empty vec on malformed JSON, so a non-empty
+        // result proves every embedded size file parsed into the expected shape.
+        for (li, lang) in LANGUAGES.iter().enumerate() {
+            for (si, size) in lang.sizes.iter().enumerate() {
+                let words = load_words(li, si);
+                assert!(
+                    !words.is_empty(),
+                    "empty/malformed word list: {} / {}",
+                    lang.name,
+                    size.label
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn all_quote_files_parse() {
+        for lang in LANGUAGES.iter().filter(|l| l.quotes.is_some()) {
+            let quotes = load_quotes_for(lang.name);
+            assert!(
+                !quotes.is_empty(),
+                "empty/malformed quotes for {}",
+                lang.name
+            );
+            // Every quote must have a positive length so QuoteFilter buckets work.
+            assert!(
+                quotes.iter().all(|q| q.length > 0),
+                "quote with zero length in {}",
+                lang.name
+            );
+        }
+    }
+}

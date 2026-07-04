@@ -729,4 +729,76 @@ mod tests {
         let expected: Vec<char> = chars.iter().map(|c| c.expected).collect();
         assert_eq!(expected, vec!['a', ' ', 'b']);
     }
+
+    #[test]
+    fn wpm_counts_correct_chars_over_minutes() {
+        let mut g = game();
+        // Ten correct chars = two 5-char words.
+        for i in 0..10 {
+            let ch = g.chars[i].expected;
+            g.type_char(ch);
+        }
+        // Freeze elapsed at exactly one minute so timing is deterministic.
+        let start = Instant::now();
+        g.started_at = Some(start);
+        g.finished_at = Some(start + Duration::from_secs(60));
+        assert!((g.wpm() - 2.0).abs() < 1e-9);
+        assert!((g.raw_wpm() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn expert_difficulty_fails_on_wrong_char() {
+        let mut g = GameState::new(
+            Mode::Words(10),
+            Settings {
+                difficulty: Difficulty::Expert,
+                ..Settings::default()
+            },
+            vec![],
+        );
+        let wrong = if g.chars[0].expected == 'z' { 'a' } else { 'z' };
+        g.type_char(wrong);
+        assert!(g.difficulty_failed);
+        assert!(g.is_failed());
+        assert_eq!(g.fail_reason(), Some("difficulty"));
+    }
+
+    #[test]
+    fn master_difficulty_fails_on_wrong_char_before_space() {
+        let mut g = GameState::new(
+            Mode::Words(10),
+            Settings {
+                difficulty: Difficulty::Master,
+                ..Settings::default()
+            },
+            vec![],
+        );
+        let space_idx = g.chars.iter().position(|c| c.expected == ' ').unwrap();
+        // Type the first word with one deliberate error, then the space.
+        for i in 0..space_idx {
+            let wrong = if g.chars[i].expected == 'z' { 'a' } else { 'z' };
+            g.type_char(wrong);
+        }
+        g.type_char(' ');
+        assert!(g.difficulty_failed);
+    }
+
+    #[test]
+    fn quote_filter_length_buckets() {
+        assert!(QuoteFilter::Short.matches(100));
+        assert!(!QuoteFilter::Short.matches(101));
+        assert!(QuoteFilter::Medium.matches(101));
+        assert!(QuoteFilter::Medium.matches(300));
+        assert!(QuoteFilter::Long.matches(301));
+        assert!(QuoteFilter::Thicc.matches(601));
+        assert!(QuoteFilter::All.matches(9999));
+    }
+
+    #[test]
+    fn cycle_enum_wraps_both_directions() {
+        assert_eq!(Difficulty::Normal.prev(), Difficulty::Master);
+        assert_eq!(Difficulty::Master.next(), Difficulty::Normal);
+        assert!(CursorShape::default() == CursorShape::Bar);
+        assert!(CursorShape::Bar.prev() == CursorShape::Underline);
+    }
 }

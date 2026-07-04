@@ -43,3 +43,39 @@ pub fn update_pb(pb: &mut PersonalBests, key: String, wpm: f64, acc: f64) -> boo
     }
     is_new
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_result_is_always_a_pb() {
+        let mut pb = PersonalBests::new();
+        assert!(update_pb(&mut pb, "k".into(), 50.0, 95.0));
+    }
+
+    #[test]
+    fn higher_wpm_beats_existing() {
+        let mut pb = PersonalBests::new();
+        update_pb(&mut pb, "k".into(), 50.0, 99.0);
+        assert!(update_pb(&mut pb, "k".into(), 60.0, 80.0));
+        assert_eq!(pb["k"].wpm, 60.0);
+    }
+
+    #[test]
+    fn lower_wpm_does_not_overwrite() {
+        let mut pb = PersonalBests::new();
+        update_pb(&mut pb, "k".into(), 60.0, 90.0);
+        assert!(!update_pb(&mut pb, "k".into(), 50.0, 100.0));
+        assert_eq!(pb["k"].wpm, 60.0);
+    }
+
+    #[test]
+    fn equal_wpm_breaks_tie_on_accuracy() {
+        let mut pb = PersonalBests::new();
+        update_pb(&mut pb, "k".into(), 60.0, 90.0);
+        assert!(update_pb(&mut pb, "k".into(), 60.0, 95.0));
+        assert_eq!(pb["k"].acc, 95.0);
+        assert!(!update_pb(&mut pb, "k".into(), 60.0, 92.0));
+    }
+}
