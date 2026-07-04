@@ -23,6 +23,17 @@ pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100];
 pub const LANG_PICKER_VISIBLE: usize = 12;
 const CUSTOM_INPUT_MAX_LEN: usize = 5;
 
+/// Settings-screen rows (cursor shape, sound, volume, history expiry, difficulty).
+const SETTINGS_ROWS: usize = 5;
+const SETTINGS_ROW_VOLUME: usize = 2;
+const DEFAULT_VOLUME_PCT: u8 = 25;
+const VOLUME_STEP: u8 = 5;
+const VOLUME_MIN: u8 = 1;
+const VOLUME_MAX: u8 = 100;
+/// Clamps for custom time (seconds) and word-count input.
+const CUSTOM_TIME_MAX: u64 = 3600;
+const CUSTOM_WORDS_MAX: usize = 5000;
+
 pub struct SettingsState {
     pub cursor: usize,
     pub pending_exit: bool,
@@ -31,10 +42,12 @@ pub struct SettingsState {
 }
 
 pub fn filtered_languages(search: &str) -> Vec<(usize, &'static LangDef)> {
+    // Lowercase the query once instead of per-language.
+    let needle = search.to_lowercase();
     LANGUAGES
         .iter()
         .enumerate()
-        .filter(|(_, l)| l.name.to_lowercase().contains(&search.to_lowercase()))
+        .filter(|(_, l)| l.name.to_lowercase().contains(&needle))
         .collect()
 }
 
@@ -142,16 +155,28 @@ impl App {
         let mode = self.menu_mode;
         let quotes = std::mem::take(&mut self.game.all_quotes);
         self.game = GameState::new(mode, self.settings.clone(), quotes);
-        self.scroll_word = 0;
-        self.result_saved = false;
-        self.screen = Screen::Test;
+        self.begin_replay();
     }
 
+    /// Restart with a freshly generated set of words/quote.
     fn restart_test(&mut self) {
         self.game.settings = self.settings.clone();
         self.game.reset();
+        self.begin_replay();
+    }
+
+    /// Replay the exact same words (used from the result screen).
+    fn repeat_test(&mut self) {
+        self.game.settings = self.settings.clone();
+        self.game.repeat();
+        self.begin_replay();
+    }
+
+    /// Shared post-reset bookkeeping to (re)enter the Test screen.
+    fn begin_replay(&mut self) {
         self.scroll_word = 0;
         self.result_saved = false;
+        self.screen = Screen::Test;
     }
 
     pub fn on_key(&mut self, key: KeyEvent) {
@@ -365,11 +390,11 @@ impl App {
                     .unwrap_or(0);
                 match self.menu_mode {
                     Mode::Time(_) => {
-                        self.custom_time_val = val.clamp(1, 3600);
+                        self.custom_time_val = val.clamp(1, CUSTOM_TIME_MAX);
                         self.menu_mode = Mode::Time(self.custom_time_val);
                     }
                     Mode::Words(_) => {
-                        self.custom_words_val = (val as usize).clamp(1, 5000);
+                        self.custom_words_val = (val as usize).clamp(1, CUSTOM_WORDS_MAX);
                         self.menu_mode = Mode::Words(self.custom_words_val);
                     }
                     _ => {}
@@ -488,14 +513,17 @@ impl App {
                 .as_ref()
                 .map(|s| s.pack)
                 .unwrap_or(SoundPack::Off),
-            self.sound.as_ref().map(|s| s.volume_pct).unwrap_or(25),
+            self.sound
+                .as_ref()
+                .map(|s| s.volume_pct)
+                .unwrap_or(DEFAULT_VOLUME_PCT),
         )
     }
 
     // ── settings ─────────────────────────────────────────────────────────────
 
     pub fn settings_max_cursor(&self) -> usize {
-        4 // 5 rows: cursor shape, sound, volume, history expiry, difficulty
+        SETTINGS_ROWS - 1
     }
 
     fn apply_volume_input(&mut self) {
@@ -507,33 +535,86 @@ impl App {
         }
     }
 
-    fn handle_settings(&mut self, key: KeyEvent) {
-        let max_cursor = self.settings_max_cursor();
-        let on_volume = self.settings_state.cursor == 2;
+    /// Handle digit / backspace editing of the volume field. Returns `true` when
+    /// the key was consumed as text input.
+    fn handle_settings_volume_input(&mut self, key: KeyEvent) -> bool {
+        let on_volume = self.settings_state.cursor == SETTINGS_ROW_VOLUME;
+        if !on_volume || self.settings_state.pending_exit || self.sound.is_none() {
+            return false;
+        }
+        match key.code {
+            KeyCode::Char(c @ '0'..='9') => {
+                let buf = self.settings_state.volume_input.get_or_insert_default();
+                if buf.len() < 3 {
+                    buf.push(c);
+                }
+                true
+            }
+            KeyCode::Backspace => {
+                if let Some(buf) = &mut self.settings_state.volume_input {
+                    buf.pop();
+                    if buf.is_empty() {
+                        self.settings_state.volume_input = None;
+                    }
+                    return true;
+                }
+                false
+            }
+            _ => {
+                self.apply_volume_input();
+                false
+            }
+        }
+    }
 
-        // volume text input: digits and backspace when on volume row (and sound is available)
-        if on_volume && !self.settings_state.pending_exit && self.sound.is_some() {
-            match key.code {
-                KeyCode::Char(c @ '0'..='9') => {
-                    let buf = self.settings_state.volume_input.get_or_insert_default();
-                    if buf.len() < 3 {
-                        buf.push(c);
-                    }
-                    return;
-                }
-                KeyCode::Backspace => {
-                    if let Some(buf) = &mut self.settings_state.volume_input {
-                        buf.pop();
-                        if buf.is_empty() {
-                            self.settings_state.volume_input = None;
-                        }
-                        return;
-                    }
-                }
-                _ => {
-                    self.apply_volume_input();
+    /// Cycle the value on the current settings row (Left = reverse).
+    fn adjust_setting_row(&mut self, rev: bool) {
+        match self.settings_state.cursor {
+            0 => {
+                self.settings.cursor_shape = if rev {
+                    self.settings.cursor_shape.prev()
+                } else {
+                    self.settings.cursor_shape.next()
                 }
             }
+            1 => {
+                if let Some(s) = &mut self.sound {
+                    s.pack = if rev { s.pack.prev() } else { s.pack.next() };
+                }
+            }
+            SETTINGS_ROW_VOLUME => {
+                if let Some(s) = &mut self.sound {
+                    let new = if rev {
+                        s.volume_pct.saturating_sub(VOLUME_STEP).max(VOLUME_MIN)
+                    } else {
+                        (s.volume_pct + VOLUME_STEP).min(VOLUME_MAX)
+                    };
+                    s.set_volume_pct(new);
+                }
+            }
+            3 => {
+                self.settings.history_expiry = if rev {
+                    self.settings.history_expiry.prev()
+                } else {
+                    self.settings.history_expiry.next()
+                };
+            }
+            4 => {
+                self.settings.difficulty = if rev {
+                    self.settings.difficulty.prev()
+                } else {
+                    self.settings.difficulty.next()
+                };
+            }
+            _ => {}
+        }
+    }
+
+    fn handle_settings(&mut self, key: KeyEvent) {
+        let max_cursor = self.settings_max_cursor();
+
+        if self.handle_settings_volume_input(key) {
+            return;
         }
 
         match key.code {
@@ -574,7 +655,11 @@ impl App {
                     .as_ref()
                     .map(|s| s.pack)
                     .unwrap_or(SoundPack::Off);
-                let sound_vol = self.sound.as_ref().map(|s| s.volume_pct).unwrap_or(25);
+                let sound_vol = self
+                    .sound
+                    .as_ref()
+                    .map(|s| s.volume_pct)
+                    .unwrap_or(DEFAULT_VOLUME_PCT);
                 let unchanged =
                     self.settings_state
                         .snapshot
@@ -603,46 +688,7 @@ impl App {
                 }
             }
             KeyCode::Left | KeyCode::Right => {
-                let rev = matches!(key.code, KeyCode::Left);
-                match self.settings_state.cursor {
-                    0 => {
-                        self.settings.cursor_shape = if rev {
-                            self.settings.cursor_shape.prev()
-                        } else {
-                            self.settings.cursor_shape.next()
-                        }
-                    }
-                    1 => {
-                        if let Some(s) = &mut self.sound {
-                            s.pack = if rev { s.pack.prev() } else { s.pack.next() };
-                        }
-                    }
-                    2 => {
-                        if let Some(s) = &mut self.sound {
-                            let new = if rev {
-                                s.volume_pct.saturating_sub(5).max(1)
-                            } else {
-                                (s.volume_pct + 5).min(100)
-                            };
-                            s.set_volume_pct(new);
-                        }
-                    }
-                    3 => {
-                        self.settings.history_expiry = if rev {
-                            self.settings.history_expiry.prev()
-                        } else {
-                            self.settings.history_expiry.next()
-                        };
-                    }
-                    4 => {
-                        self.settings.difficulty = if rev {
-                            self.settings.difficulty.prev()
-                        } else {
-                            self.settings.difficulty.next()
-                        };
-                    }
-                    _ => {}
-                }
+                self.adjust_setting_row(matches!(key.code, KeyCode::Left));
             }
             _ => {}
         }
@@ -689,17 +735,8 @@ impl App {
 
     fn handle_result(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('r') | KeyCode::Char('R') => {
-                self.game.settings = self.settings.clone();
-                self.game.repeat();
-                self.scroll_word = 0;
-                self.result_saved = false;
-                self.screen = Screen::Test;
-            }
-            KeyCode::Enter | KeyCode::Tab => {
-                self.restart_test();
-                self.screen = Screen::Test;
-            }
+            KeyCode::Char('r') | KeyCode::Char('R') => self.repeat_test(),
+            KeyCode::Enter | KeyCode::Tab => self.restart_test(),
             KeyCode::Esc => self.screen = Screen::Menu,
             _ => {}
         }

@@ -4,40 +4,18 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const HISTORY_LIMIT: usize = 50;
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
-pub enum HistoryExpiry {
-    Days7,
-    Days30,
-    #[default]
-    Days90,
-    Off,
+cycle_enum! {
+    #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+    pub enum HistoryExpiry {
+        Days7 = "7 days",
+        Days30 = "30 days",
+        Days90 = "90 days",
+        Off = "off",
+    }
+    default = Days90;
 }
 
 impl HistoryExpiry {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Days7 => "7 days",
-            Self::Days30 => "30 days",
-            Self::Days90 => "90 days",
-            Self::Off => "off",
-        }
-    }
-    pub fn next(self) -> Self {
-        match self {
-            Self::Days7 => Self::Days30,
-            Self::Days30 => Self::Days90,
-            Self::Days90 => Self::Off,
-            Self::Off => Self::Days7,
-        }
-    }
-    pub fn prev(self) -> Self {
-        match self {
-            Self::Days7 => Self::Off,
-            Self::Days30 => Self::Days7,
-            Self::Days90 => Self::Days30,
-            Self::Off => Self::Days90,
-        }
-    }
     fn cutoff_secs(self) -> Option<u64> {
         let days: u64 = match self {
             Self::Days7 => 7,

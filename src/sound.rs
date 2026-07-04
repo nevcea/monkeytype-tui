@@ -3,34 +3,12 @@ use rodio::{DeviceSinkBuilder, MixerDeviceSink, Player};
 use std::f32::consts::PI;
 use std::num::NonZero;
 
-#[derive(Clone, Copy, PartialEq)]
-pub enum SoundPack {
-    Off,
-    Click,
-    Pop,
-}
-
-impl SoundPack {
-    pub fn next(self) -> Self {
-        match self {
-            Self::Off => Self::Click,
-            Self::Click => Self::Pop,
-            Self::Pop => Self::Off,
-        }
-    }
-    pub fn prev(self) -> Self {
-        match self {
-            Self::Off => Self::Pop,
-            Self::Click => Self::Off,
-            Self::Pop => Self::Click,
-        }
-    }
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Off => "off",
-            Self::Click => "click",
-            Self::Pop => "pop",
-        }
+cycle_enum! {
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum SoundPack {
+        Off = "off",
+        Click = "click",
+        Pop = "pop",
     }
 }
 

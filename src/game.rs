@@ -49,58 +49,29 @@ impl std::fmt::Display for Mode {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Default)]
-pub enum CursorShape {
-    #[default]
-    Bar,
-    Block,
-    Underline,
+cycle_enum! {
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum CursorShape {
+        Bar = "bar",
+        Block = "block",
+        Underline = "underline",
+    }
+    default = Bar;
 }
 
-impl CursorShape {
-    pub fn next(self) -> Self {
-        match self {
-            Self::Bar => Self::Block,
-            Self::Block => Self::Underline,
-            Self::Underline => Self::Bar,
-        }
+cycle_enum! {
+    #[derive(Clone, Copy, PartialEq)]
+    pub enum QuoteFilter {
+        All = "all",
+        Short = "short",   // ≤ 100 chars
+        Medium = "medium", // 101–300
+        Long = "long",     // 301–600
+        Thicc = "thicc",   // 601+
     }
-    pub fn prev(self) -> Self {
-        match self {
-            Self::Bar => Self::Underline,
-            Self::Block => Self::Bar,
-            Self::Underline => Self::Block,
-        }
-    }
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Bar => "bar",
-            Self::Block => "block",
-            Self::Underline => "underline",
-        }
-    }
-}
-
-#[derive(Clone, Copy, PartialEq, Default)]
-pub enum QuoteFilter {
-    #[default]
-    All,
-    Short,  // ≤ 100 chars
-    Medium, // 101–300
-    Long,   // 301–600
-    Thicc,  // 601+
+    default = All;
 }
 
 impl QuoteFilter {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::All => "all",
-            Self::Short => "short",
-            Self::Medium => "medium",
-            Self::Long => "long",
-            Self::Thicc => "thicc",
-        }
-    }
     pub fn matches(self, len: u64) -> bool {
         match self {
             Self::All => true,
@@ -110,56 +81,16 @@ impl QuoteFilter {
             Self::Thicc => len >= 601,
         }
     }
-    pub fn next(self) -> Self {
-        match self {
-            Self::All => Self::Short,
-            Self::Short => Self::Medium,
-            Self::Medium => Self::Long,
-            Self::Long => Self::Thicc,
-            Self::Thicc => Self::All,
-        }
-    }
-    pub fn prev(self) -> Self {
-        match self {
-            Self::All => Self::Thicc,
-            Self::Short => Self::All,
-            Self::Medium => Self::Short,
-            Self::Long => Self::Medium,
-            Self::Thicc => Self::Long,
-        }
-    }
 }
 
-#[derive(Clone, Copy, PartialEq, Default, Debug)]
-pub enum Difficulty {
-    #[default]
-    Normal,
-    Expert,
-    Master,
-}
-
-impl Difficulty {
-    pub fn label(self) -> &'static str {
-        match self {
-            Self::Normal => "normal",
-            Self::Expert => "expert",
-            Self::Master => "master",
-        }
+cycle_enum! {
+    #[derive(Clone, Copy, PartialEq, Debug)]
+    pub enum Difficulty {
+        Normal = "normal",
+        Expert = "expert",
+        Master = "master",
     }
-    pub fn next(self) -> Self {
-        match self {
-            Self::Normal => Self::Expert,
-            Self::Expert => Self::Master,
-            Self::Master => Self::Normal,
-        }
-    }
-    pub fn prev(self) -> Self {
-        match self {
-            Self::Normal => Self::Master,
-            Self::Expert => Self::Normal,
-            Self::Master => Self::Expert,
-        }
-    }
+    default = Normal;
 }
 
 #[derive(Clone, Default, PartialEq)]
@@ -198,7 +129,7 @@ pub struct GameState {
     last_sample_elapsed: f64,
     last_keystroke: Option<Instant>,
     last_quote_idx: Option<usize>,
-    all_words: Vec<String>,
+    all_words: std::sync::Arc<Vec<String>>,
     pub all_quotes: Vec<QuoteEntry>,
 }
 
@@ -238,67 +169,11 @@ impl GameState {
 
     pub fn reset(&mut self) {
         let mut rng = rand::rng();
-
-        let (raw_words, source): (Vec<String>, Option<String>) = match self.mode {
-            Mode::Time(_) => {
-                let w = self
-                    .all_words
-                    .sample(&mut rng, TIME_MODE_POOL)
-                    .cloned()
-                    .collect();
-                (w, None)
-            }
-            Mode::Words(n) => {
-                let w = self.all_words.sample(&mut rng, n).cloned().collect();
-                (w, None)
-            }
-            Mode::Quote => {
-                let filter = self.settings.quote_filter;
-                let pool: Vec<usize> = self
-                    .all_quotes
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, q)| filter.matches(q.length))
-                    .map(|(i, _)| i)
-                    .collect();
-                // fall back to full list if filter yields nothing
-                let pool: &[usize] = if pool.is_empty() { &[] } else { &pool };
-                let n = if pool.is_empty() {
-                    self.all_quotes.len()
-                } else {
-                    pool.len()
-                };
-                if n == 0 {
-                    (vec!["no quotes loaded".to_string()], None)
-                } else {
-                    let mut pos = rng.random_range(0..n);
-                    if n > 1 {
-                        let real_idx = |p| if pool.is_empty() { p } else { pool[p] };
-                        while Some(real_idx(pos)) == self.last_quote_idx {
-                            pos = rng.random_range(0..n);
-                        }
-                    }
-                    let idx = if pool.is_empty() { pos } else { pool[pos] };
-                    self.last_quote_idx = Some(idx);
-                    let q = &self.all_quotes[idx];
-                    let words = q.text.split_whitespace().map(String::from).collect();
-                    (words, Some(q.source.clone()))
-                }
-            }
-        };
-
-        // Punctuation / numbers only apply to word/time modes
-        let words = if source.is_none() {
-            let mut w = raw_words;
-            if self.settings.numbers {
-                w = apply_numbers(w, &mut rng);
-            }
-            if self.settings.punctuation {
-                w = apply_punctuation(w, &mut rng);
-            }
-            w
-        } else {
-            raw_words
+        let (raw_words, source) = self.pick_words(&mut rng);
+        // Punctuation / numbers decorate generated word/time modes only, not quotes.
+        let words = match source {
+            Some(_) => raw_words,
+            None => self.decorate_words(raw_words, &mut rng),
         };
 
         self.quote_source = source;
@@ -306,6 +181,61 @@ impl GameState {
         self.chars = words_to_chars(&self.words);
         self.word_starts = compute_word_starts(&self.words);
         self.reset_counters();
+    }
+
+    /// Produce the raw word list for the current mode plus the quote source
+    /// (`Some` only in `Mode::Quote`).
+    fn pick_words(&mut self, rng: &mut impl Rng) -> (Vec<String>, Option<String>) {
+        match self.mode {
+            Mode::Time(_) => (
+                self.all_words
+                    .sample(rng, TIME_MODE_POOL)
+                    .cloned()
+                    .collect(),
+                None,
+            ),
+            Mode::Words(n) => (self.all_words.sample(rng, n).cloned().collect(), None),
+            Mode::Quote => self.pick_quote(rng),
+        }
+    }
+
+    fn pick_quote(&mut self, rng: &mut impl Rng) -> (Vec<String>, Option<String>) {
+        let filter = self.settings.quote_filter;
+        let mut pool: Vec<usize> = self
+            .all_quotes
+            .iter()
+            .enumerate()
+            .filter(|(_, q)| filter.matches(q.length))
+            .map(|(i, _)| i)
+            .collect();
+        // Fall back to the full list if the filter matched nothing.
+        if pool.is_empty() {
+            pool = (0..self.all_quotes.len()).collect();
+        }
+        if pool.is_empty() {
+            return (vec!["no quotes loaded".to_string()], None);
+        }
+
+        let mut pos = rng.random_range(0..pool.len());
+        // Avoid repeating the previous quote when there's a choice.
+        while pool.len() > 1 && Some(pool[pos]) == self.last_quote_idx {
+            pos = rng.random_range(0..pool.len());
+        }
+        let idx = pool[pos];
+        self.last_quote_idx = Some(idx);
+        let q = &self.all_quotes[idx];
+        let words = q.text.split_whitespace().map(String::from).collect();
+        (words, Some(q.source.clone()))
+    }
+
+    fn decorate_words(&self, mut w: Vec<String>, rng: &mut impl Rng) -> Vec<String> {
+        if self.settings.numbers {
+            w = apply_numbers(w, rng);
+        }
+        if self.settings.punctuation {
+            w = apply_punctuation(w, rng);
+        }
+        w
     }
 
     pub fn type_char(&mut self, c: char) {

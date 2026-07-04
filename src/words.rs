@@ -1,4 +1,6 @@
 use serde::Deserialize;
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock, Mutex};
 
 pub struct LangSize {
     pub label: &'static str,
@@ -428,18 +430,36 @@ pub static LANGUAGES: &[LangDef] = &[
     ),
 ];
 
-pub fn load_words(lang_idx: usize, size_idx: usize) -> Vec<String> {
+type WordCache = HashMap<(usize, usize), Arc<Vec<String>>>;
+
+/// Parsed word lists cached by (lang_idx, size_idx) so restarting a test never
+/// re-deserializes the embedded JSON (some lists hold ~10k words).
+static WORD_CACHE: LazyLock<Mutex<WordCache>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub fn load_words(lang_idx: usize, size_idx: usize) -> Arc<Vec<String>> {
     #[derive(Deserialize)]
     struct WordList {
         words: Vec<String>,
+    }
+    let key = (lang_idx, size_idx);
+    if let Ok(cache) = WORD_CACHE.lock()
+        && let Some(words) = cache.get(&key)
+    {
+        return Arc::clone(words);
     }
     let lang = LANGUAGES.get(lang_idx).unwrap_or(&LANGUAGES[0]);
     let size = lang.sizes.get(size_idx).unwrap_or(&lang.sizes[0]);
     // Degrade gracefully rather than panic if an embedded file is malformed;
     // `tests::all_word_lists_parse` guards against this at build/test time.
-    serde_json::from_str::<WordList>(size.json)
-        .map(|w| w.words)
-        .unwrap_or_default()
+    let words: Arc<Vec<String>> = Arc::new(
+        serde_json::from_str::<WordList>(size.json)
+            .map(|w| w.words)
+            .unwrap_or_default(),
+    );
+    if let Ok(mut cache) = WORD_CACHE.lock() {
+        cache.insert(key, Arc::clone(&words));
+    }
+    words
 }
 
 #[derive(Deserialize, Clone)]
