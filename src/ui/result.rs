@@ -298,6 +298,8 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
         Line::from(Span::styled(format!("{n}"), Style::default().fg(C_DIM))),
     ];
 
+    // Distinct markers per series so the lines are also distinguishable by
+    // texture, not color alone (accessibility for colorblind/monochrome).
     let mut datasets = vec![
         Dataset::default()
             .marker(symbols::Marker::Braille)
@@ -305,7 +307,7 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
             .style(Style::default().fg(C_PENDING))
             .data(&burst_data),
         Dataset::default()
-            .marker(symbols::Marker::Braille)
+            .marker(symbols::Marker::Dot)
             .graph_type(GraphType::Line)
             .style(Style::default().fg(C_SUB))
             .data(&raw_data),
@@ -313,7 +315,7 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
     if scale_data.len() >= 2 {
         datasets.push(
             Dataset::default()
-                .marker(symbols::Marker::Braille)
+                .marker(symbols::Marker::Block)
                 .graph_type(GraphType::Line)
                 .style(Style::default().fg(C_ACCENT))
                 .data(&scale_data),
@@ -348,8 +350,8 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled("─ burst  ", Style::default().fg(C_PENDING)),
-            Span::styled("─ raw  ", Style::default().fg(C_SUB)),
-            Span::styled("─ scale  ", Style::default().fg(C_ACCENT)),
+            Span::styled("⋯ raw  ", Style::default().fg(C_SUB)),
+            Span::styled("▬ scale  ", Style::default().fg(C_ACCENT)),
             Span::styled("• errors", Style::default().fg(C_WRONG)),
         ]))
         .alignment(Alignment::Center),

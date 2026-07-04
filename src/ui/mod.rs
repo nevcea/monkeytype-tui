@@ -234,5 +234,12 @@ pub(super) fn kh(key: &str) -> Span<'static> {
 }
 
 pub(super) fn col<S: Into<String>>(s: S, w: usize, color: Color) -> Span<'static> {
-    Span::styled(format!("{:<w$}", s.into()), Style::default().fg(color))
+    use unicode_width::UnicodeWidthStr;
+    // Pad by display width, not char count, so wide (CJK) names stay aligned.
+    let s = s.into();
+    let pad = w.saturating_sub(s.width());
+    Span::styled(
+        format!("{s}{}", " ".repeat(pad)),
+        Style::default().fg(color),
+    )
 }

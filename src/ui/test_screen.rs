@@ -246,7 +246,9 @@ pub(super) fn build_word_line<'a>(
 
 fn char_style(state: CharState, dim_pending: bool, cursor_shape: Option<CursorShape>) -> Style {
     match state {
-        CharState::Correct => Style::default().fg(C_CORRECT),
+        // Bold gives correct chars a non-color cue vs. pending, for low-vision /
+        // monochrome terminals where the brightness difference is hard to read.
+        CharState::Correct => Style::default().fg(C_CORRECT).add_modifier(Modifier::BOLD),
         CharState::Wrong => {
             let s = Style::default()
                 .fg(C_WRONG)
