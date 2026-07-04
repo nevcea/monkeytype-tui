@@ -3,6 +3,7 @@ mod game;
 mod history;
 mod pb;
 mod sound;
+mod storage;
 mod ui;
 mod words;
 
@@ -22,12 +23,26 @@ use app::App;
 struct TerminalGuard;
 impl Drop for TerminalGuard {
     fn drop(&mut self) {
-        let _ = disable_raw_mode();
-        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        restore_terminal();
     }
 }
 
+/// Best-effort terminal restoration, safe to call from a panic hook.
+fn restore_terminal() {
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen);
+}
+
 fn main() -> io::Result<()> {
+    // Restore the terminal before the default hook prints the panic, otherwise
+    // the message is swallowed by the alternate screen / raw mode. The Drop
+    // guard also restores on normal unwind, but the hook makes the panic legible.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        restore_terminal();
+        default_hook(info);
+    }));
+
     enable_raw_mode()?;
     execute!(io::stdout(), EnterAlternateScreen)?;
     let _guard = TerminalGuard;

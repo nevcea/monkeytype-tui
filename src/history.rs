@@ -87,9 +87,7 @@ impl HistoryEntry {
 }
 
 fn history_path() -> Option<PathBuf> {
-    Some(
-        PathBuf::from(std::env::var("HOME").ok()?).join(".local/share/monkeytype-tui/history.json"),
-    )
+    Some(crate::storage::data_dir()?.join("history.json"))
 }
 
 pub fn load_history(expiry: HistoryExpiry) -> Vec<HistoryEntry> {
@@ -113,11 +111,8 @@ pub fn save_entry(entry: HistoryEntry, history: &mut Vec<HistoryEntry>) {
     history.insert(0, entry);
     history.truncate(HISTORY_LIMIT);
     let Some(path) = history_path() else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     if let Ok(json) = serde_json::to_string_pretty(history) {
-        let _ = std::fs::write(&path, json);
+        crate::storage::write_atomic(&path, &json);
     }
 }
 

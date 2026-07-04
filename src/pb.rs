@@ -11,7 +11,7 @@ pub struct PbEntry {
 pub type PersonalBests = HashMap<String, PbEntry>;
 
 fn pb_path() -> Option<PathBuf> {
-    Some(PathBuf::from(std::env::var("HOME").ok()?).join(".local/share/monkeytype-tui/pb.json"))
+    Some(crate::storage::data_dir()?.join("pb.json"))
 }
 
 pub fn load_pb() -> PersonalBests {
@@ -26,11 +26,8 @@ pub fn load_pb() -> PersonalBests {
 
 pub fn save_pb(pb: &PersonalBests) {
     let Some(path) = pb_path() else { return };
-    if let Some(parent) = path.parent() {
-        let _ = std::fs::create_dir_all(parent);
-    }
     if let Ok(json) = serde_json::to_string_pretty(pb) {
-        let _ = std::fs::write(&path, json);
+        crate::storage::write_atomic(&path, &json);
     }
 }
 
