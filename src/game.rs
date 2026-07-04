@@ -6,6 +6,17 @@ use crate::history::HistoryExpiry;
 use crate::words::QuoteEntry;
 use crate::words::load_words;
 
+/// Standard WPM word length (monkeytype convention).
+const CHARS_PER_WORD: f64 = 5.0;
+/// Floor for a sampling interval to avoid divide-by-near-zero WPM spikes.
+const MIN_SAMPLE_INTERVAL: f64 = 0.001;
+/// Keystroke gaps longer than this (seconds) are counted as idle/AFK.
+const AFK_THRESHOLD_SECS: f64 = 2.0;
+/// Accuracy below this percentage fails the test.
+const FAIL_ACCURACY: f64 = 75.0;
+/// Word pool size sampled for time-based tests.
+const TIME_MODE_POOL: usize = 500;
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum CharState {
     Correct,
@@ -182,6 +193,9 @@ pub struct GameState {
     pub difficulty_failed: bool,
     last_sample_secs: u64,
     last_sample_errors: usize,
+    last_sample_correct: usize,
+    last_sample_cursor: usize,
+    last_sample_elapsed: f64,
     last_keystroke: Option<Instant>,
     last_quote_idx: Option<usize>,
     all_words: Vec<String>,
@@ -210,6 +224,9 @@ impl GameState {
             difficulty_failed: false,
             last_sample_secs: 0,
             last_sample_errors: 0,
+            last_sample_correct: 0,
+            last_sample_cursor: 0,
+            last_sample_elapsed: 0.0,
             last_keystroke: None,
             last_quote_idx: None,
             all_words,
@@ -224,7 +241,11 @@ impl GameState {
 
         let (raw_words, source): (Vec<String>, Option<String>) = match self.mode {
             Mode::Time(_) => {
-                let w = self.all_words.sample(&mut rng, 500).cloned().collect();
+                let w = self
+                    .all_words
+                    .sample(&mut rng, TIME_MODE_POOL)
+                    .cloned()
+                    .collect();
                 (w, None)
             }
             Mode::Words(n) => {
@@ -298,7 +319,7 @@ impl GameState {
         // accumulate AFK: gaps > 2s between keystrokes count as idle
         if let Some(last) = self.last_keystroke {
             let gap = now.duration_since(last).as_secs_f64();
-            if gap > 2.0 {
+            if gap > AFK_THRESHOLD_SECS {
                 self.afk_secs += gap;
             }
         }
@@ -392,6 +413,9 @@ impl GameState {
         self.difficulty_failed = false;
         self.last_sample_secs = 0;
         self.last_sample_errors = 0;
+        self.last_sample_correct = 0;
+        self.last_sample_cursor = 0;
+        self.last_sample_elapsed = 0.0;
         self.last_keystroke = None;
         if !self.chars.is_empty() {
             self.chars[0].state = CharState::Current;
@@ -411,11 +435,24 @@ impl GameState {
     }
 
     fn push_sample(&mut self) {
-        self.wpm_samples.push(self.wpm());
-        self.raw_wpm_samples.push(self.raw_wpm());
+        // Sample the *instantaneous* (per-interval) WPM, not the cumulative
+        // average. Cumulative samples are inherently smooth and inflate
+        // consistency; per-interval samples match monkeytype's per-second bursts.
+        let elapsed = self.elapsed().as_secs_f64();
+        let interval = (elapsed - self.last_sample_elapsed).max(MIN_SAMPLE_INTERVAL);
+        let correct = self.correct_chars();
+        let d_correct = correct.saturating_sub(self.last_sample_correct);
+        let d_total = self.cursor.saturating_sub(self.last_sample_cursor);
+        self.wpm_samples
+            .push((d_correct as f64 / CHARS_PER_WORD) / (interval / 60.0));
+        self.raw_wpm_samples
+            .push((d_total as f64 / CHARS_PER_WORD) / (interval / 60.0));
         self.error_samples
             .push(self.error_keystrokes - self.last_sample_errors);
         self.last_sample_errors = self.error_keystrokes;
+        self.last_sample_correct = correct;
+        self.last_sample_cursor = self.cursor;
+        self.last_sample_elapsed = elapsed;
     }
 
     pub fn tick(&mut self) {
@@ -474,18 +511,20 @@ impl GameState {
         }
     }
 
+    fn correct_chars(&self) -> usize {
+        self.chars
+            .iter()
+            .take(self.cursor)
+            .filter(|c| c.state == CharState::Correct)
+            .count()
+    }
+
     pub fn wpm(&self) -> f64 {
         let secs = self.elapsed().as_secs_f64();
         if secs < 0.1 {
             return 0.0;
         }
-        let correct = self
-            .chars
-            .iter()
-            .take(self.cursor)
-            .filter(|c| c.state == CharState::Correct)
-            .count() as f64;
-        (correct / 5.0) / (secs / 60.0)
+        (self.correct_chars() as f64 / CHARS_PER_WORD) / (secs / 60.0)
     }
 
     pub fn raw_wpm(&self) -> f64 {
@@ -493,7 +532,7 @@ impl GameState {
         if secs < 0.1 {
             return 0.0;
         }
-        (self.cursor as f64 / 5.0) / (secs / 60.0)
+        (self.cursor as f64 / CHARS_PER_WORD) / (secs / 60.0)
     }
 
     pub fn accuracy(&self) -> f64 {
@@ -505,13 +544,13 @@ impl GameState {
     }
 
     pub fn is_failed(&self) -> bool {
-        self.difficulty_failed || self.accuracy() < 75.0
+        self.difficulty_failed || self.accuracy() < FAIL_ACCURACY
     }
 
     pub fn fail_reason(&self) -> Option<&'static str> {
         if self.difficulty_failed {
             Some("difficulty")
-        } else if self.accuracy() < 75.0 {
+        } else if self.accuracy() < FAIL_ACCURACY {
             Some("accuracy")
         } else {
             None

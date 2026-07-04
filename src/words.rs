@@ -435,9 +435,11 @@ pub fn load_words(lang_idx: usize, size_idx: usize) -> Vec<String> {
     }
     let lang = LANGUAGES.get(lang_idx).unwrap_or(&LANGUAGES[0]);
     let size = lang.sizes.get(size_idx).unwrap_or(&lang.sizes[0]);
+    // Degrade gracefully rather than panic if an embedded file is malformed;
+    // `tests::all_word_lists_parse` guards against this at build/test time.
     serde_json::from_str::<WordList>(size.json)
-        .expect("embedded word list is valid JSON")
-        .words
+        .map(|w| w.words)
+        .unwrap_or_default()
 }
 
 #[derive(Deserialize, Clone)]
@@ -460,7 +462,15 @@ pub fn load_quotes_for(lang: &str) -> Vec<QuoteEntry> {
     else {
         return vec![];
     };
-    serde_json::from_str::<QuoteFile>(json)
-        .expect("embedded quotes JSON is valid")
-        .quotes
+    // Degrade gracefully on malformed data (see `tests::all_quote_files_parse`).
+    let mut quotes = serde_json::from_str::<QuoteFile>(json)
+        .map(|q| q.quotes)
+        .unwrap_or_default();
+    // Some entries omit `length`; derive it from the text so QuoteFilter works.
+    for q in &mut quotes {
+        if q.length == 0 {
+            q.length = q.text.chars().count() as u64;
+        }
+    }
+    quotes
 }

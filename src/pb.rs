@@ -36,7 +36,11 @@ pub fn save_pb(pb: &PersonalBests) {
 
 /// Returns true if this result is a new personal best.
 pub fn update_pb(pb: &mut PersonalBests, key: String, wpm: f64, acc: f64) -> bool {
-    let is_new = pb.get(&key).is_none_or(|e| wpm > e.wpm);
+    // Higher WPM wins; on an equal WPM, prefer the cleaner (higher-accuracy) run
+    // so a sloppier attempt can't overwrite a tidy personal best.
+    let is_new = pb
+        .get(&key)
+        .is_none_or(|e| wpm > e.wpm || (wpm == e.wpm && acc > e.acc));
     if is_new {
         pb.insert(key, PbEntry { wpm, acc });
     }
