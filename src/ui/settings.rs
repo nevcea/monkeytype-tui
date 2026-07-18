@@ -120,7 +120,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         .iter()
         .enumerate()
         .map(|(i, (label, val, active))| {
-            let unavailable = (i == 3 || i == 4) && app.sound.is_none();
+            let unavailable = (i == 1 || i == 2) && app.sound.is_none();
             let cursor = if i == app.settings_state.cursor && !unavailable {
                 Span::styled("> ", Style::default().fg(th_accent()))
             } else {
