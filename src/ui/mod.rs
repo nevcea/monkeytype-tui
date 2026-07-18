@@ -244,3 +244,37 @@ pub(super) fn col<S: Into<String>>(s: S, w: usize, color: Color) -> Span<'static
         Style::default().fg(color),
     )
 }
+
+#[cfg(test)]
+mod render_smoke_tests {
+    use super::*;
+    use crate::app::{App, Screen};
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    /// Rendering every screen at a normal size must never panic, regardless of
+    /// what state the screen holds (e.g. empty history, a fresh unstarted game).
+    #[test]
+    fn draw_does_not_panic_on_any_screen() {
+        for screen in [
+            Screen::Menu,
+            Screen::Test,
+            Screen::Result,
+            Screen::History,
+            Screen::Help,
+            Screen::Settings,
+        ] {
+            let mut app = App::new();
+            app.screen = screen;
+            let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+            terminal.draw(|f| draw(f, &app)).unwrap();
+        }
+    }
+
+    #[test]
+    fn draw_below_min_size_shows_hint_instead_of_panicking() {
+        let app = App::new();
+        let mut terminal = Terminal::new(TestBackend::new(20, 5)).unwrap();
+        terminal.draw(|f| draw(f, &app)).unwrap();
+    }
+}

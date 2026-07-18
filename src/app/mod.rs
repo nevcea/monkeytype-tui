@@ -15,7 +15,7 @@ mod result;
 mod settings;
 mod test;
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Screen {
     Menu,
     Test,
@@ -483,5 +483,73 @@ mod tests {
     #[test]
     fn word_lines_empty() {
         assert!(word_lines(&[], 0, 80).is_empty());
+    }
+}
+
+#[cfg(test)]
+mod input_flow_tests {
+    use super::*;
+    use crossterm::event::{KeyEvent, KeyModifiers};
+
+    fn key(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    #[test]
+    fn ctrl_c_quits_from_any_screen() {
+        let mut app = App::new();
+        app.screen = Screen::Test;
+        app.on_key(KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn menu_digit_selects_mode_without_starting_test() {
+        let mut app = App::new();
+        app.on_key(key(KeyCode::Char('1')));
+        assert!(matches!(app.menu.mode, Mode::Time(_)));
+        assert_eq!(app.screen, Screen::Menu);
+    }
+
+    #[test]
+    fn menu_esc_opens_quit_confirm_instead_of_quitting_immediately() {
+        let mut app = App::new();
+        app.on_key(key(KeyCode::Esc));
+        assert!(app.dialog.quit_confirm);
+        assert!(!app.should_quit);
+
+        // Default highlighted choice is "no"; Enter dismisses without quitting.
+        app.on_key(key(KeyCode::Enter));
+        assert!(!app.dialog.quit_confirm);
+        assert!(!app.should_quit);
+    }
+
+    #[test]
+    fn test_esc_without_typing_returns_to_menu_directly() {
+        let mut app = App::new();
+        app.screen = Screen::Test;
+        assert!(app.game.started_at.is_none());
+        app.on_key(key(KeyCode::Esc));
+        assert_eq!(app.screen, Screen::Menu);
+        assert!(!app.dialog.test_confirm);
+    }
+
+    #[test]
+    fn test_esc_after_typing_asks_for_confirmation_before_leaving() {
+        let mut app = App::new();
+        app.screen = Screen::Test;
+        let ch = app.game.chars[0].expected;
+        app.on_key(key(KeyCode::Char(ch)));
+        assert!(app.game.started_at.is_some());
+
+        app.on_key(key(KeyCode::Esc));
+        assert!(app.dialog.test_confirm);
+        assert_eq!(app.screen, Screen::Test);
+
+        // Toggle to "yes" then confirm; only then does it leave the test.
+        app.on_key(key(KeyCode::Left));
+        app.on_key(key(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::Menu);
+        assert!(!app.dialog.test_confirm);
     }
 }
