@@ -7,7 +7,7 @@ use ratatui::{
 };
 
 use crate::app::{App, TIME_OPTIONS, WORD_OPTIONS};
-use crate::game::{Mode, QuoteFilter};
+use crate::game::{Difficulty, Mode, QuoteFilter};
 use crate::words::LANGUAGES;
 
 use super::*;
@@ -204,13 +204,27 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         size_a,
     );
 
+    let mut toggle_line = vec![
+        toggle_span("punctuation", app.settings.punctuation),
+        Span::raw("     "),
+        toggle_span("numbers", app.settings.numbers),
+    ];
+    // Surface persisted difficulty (when not default) and the active theme so
+    // saved preferences are visible at a glance.
+    if app.settings.difficulty != Difficulty::Normal {
+        toggle_line.push(Span::raw("     "));
+        toggle_line.push(Span::styled(
+            app.settings.difficulty.label(),
+            Style::default().fg(th_accent()),
+        ));
+    }
+    toggle_line.push(Span::raw("     "));
+    toggle_line.push(Span::styled(
+        format!("◆ {}", app.settings.theme_name),
+        Style::default().fg(th_accent()),
+    ));
     f.render_widget(
-        Paragraph::new(Line::from(vec![
-            toggle_span("punctuation", app.settings.punctuation),
-            Span::raw("     "),
-            toggle_span("numbers", app.settings.numbers),
-        ]))
-        .alignment(Alignment::Center),
+        Paragraph::new(Line::from(toggle_line)).alignment(Alignment::Center),
         toggles_a,
     );
 
@@ -247,6 +261,9 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
             Line::from(vec![
                 kh("l"),
                 Span::raw(" lang"),
+                sep(),
+                kh("t"),
+                Span::raw(" theme"),
                 sep(),
                 kh("p"),
                 Span::raw(" punct"),
