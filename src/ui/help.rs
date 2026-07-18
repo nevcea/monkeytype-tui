@@ -88,7 +88,7 @@ pub(super) fn draw_help(f: &mut Frame) {
 }
 
 pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
-    let picker = match &app.lang_picker {
+    let picker = match &app.menu.lang_picker {
         Some(p) => p,
         None => return,
     };
@@ -180,7 +180,7 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
                     spans.push(Span::styled("  ", Style::default()));
                 }
             }
-            if matches!(app.menu_mode, Mode::Quote) && lang.quotes.is_none() {
+            if matches!(app.menu.mode, Mode::Quote) && lang.quotes.is_none() {
                 spans.push(Span::styled("  no quotes", Style::default().fg(th_wrong())));
             }
             Line::from(spans)

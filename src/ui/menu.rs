@@ -59,44 +59,44 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
     let _ = gap3;
     let _ = gap4;
 
-    let time_label = match app.menu_mode {
+    let time_label = match app.menu.mode {
         Mode::Time(n) => format!("time·{n}s"),
         _ => "time".to_owned(),
     };
-    let words_label = match app.menu_mode {
+    let words_label = match app.menu.mode {
         Mode::Words(n) => format!("words·{n}"),
         _ => "words".to_owned(),
     };
     f.render_widget(
         Paragraph::new(Line::from(vec![
-            mode_tab_n("1", time_label, matches!(app.menu_mode, Mode::Time(_))),
+            mode_tab_n("1", time_label, matches!(app.menu.mode, Mode::Time(_))),
             Span::raw("    "),
-            mode_tab_n("2", words_label, matches!(app.menu_mode, Mode::Words(_))),
+            mode_tab_n("2", words_label, matches!(app.menu.mode, Mode::Words(_))),
             Span::raw("    "),
-            mode_tab_n("3", "quote", matches!(app.menu_mode, Mode::Quote)),
+            mode_tab_n("3", "quote", matches!(app.menu.mode, Mode::Quote)),
         ]))
         .alignment(Alignment::Center),
         tabs_a,
     );
 
-    let opts_line = match app.menu_mode {
+    let opts_line = match app.menu.mode {
         Mode::Time(_) => {
-            let mut spans = option_spans(TIME_OPTIONS, app.menu_time_idx, "s");
+            let mut spans = option_spans(TIME_OPTIONS, app.menu.time_idx, "s");
             spans.push(Span::raw("  "));
             spans.push(custom_slot(
-                app.menu_time_idx == TIME_OPTIONS.len(),
+                app.menu.time_idx == TIME_OPTIONS.len(),
                 "s",
-                &app.custom_input,
+                &app.menu.custom_input,
             ));
             Line::from(spans)
         }
         Mode::Words(_) => {
-            let mut spans = option_spans(WORD_OPTIONS, app.menu_word_idx, "");
+            let mut spans = option_spans(WORD_OPTIONS, app.menu.word_idx, "");
             spans.push(Span::raw("  "));
             spans.push(custom_slot(
-                app.menu_word_idx == WORD_OPTIONS.len(),
+                app.menu.word_idx == WORD_OPTIONS.len(),
                 "",
-                &app.custom_input,
+                &app.menu.custom_input,
             ));
             Line::from(spans)
         }
@@ -144,7 +144,7 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         }
     };
 
-    let opts_display = if app.custom_input.is_some() {
+    let opts_display = if app.menu.custom_input.is_some() {
         Paragraph::new(vec![
             opts_line,
             Line::from(Span::styled(
@@ -215,7 +215,7 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
     );
 
     let footer_a = pin_footer(f.area(), 2);
-    let footer_paragraph = if app.custom_input.is_some() {
+    let footer_paragraph = if app.menu.custom_input.is_some() {
         Paragraph::new(Line::from(vec![
             kh("enter"),
             Span::raw(" start"),

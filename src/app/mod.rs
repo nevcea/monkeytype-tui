@@ -74,27 +74,40 @@ impl LangPicker {
     }
 }
 
-pub struct App {
-    pub screen: Screen,
-    pub game: GameState,
-    pub settings: Settings,
-    pub menu_mode: Mode,
-    pub menu_time_idx: usize,
-    pub menu_word_idx: usize,
+/// Menu-screen selection state: which mode/option is highlighted, the pending
+/// custom-value input, and the language-picker overlay.
+pub struct MenuState {
+    pub mode: Mode,
+    pub time_idx: usize,
+    pub word_idx: usize,
     pub custom_input: Option<String>,
     pub custom_time_val: u64,
     pub custom_words_val: usize,
     pub lang_picker: Option<LangPicker>,
+}
+
+/// Modal-dialog state (quit / abandon-test confirmations) with each dialog's
+/// currently highlighted yes/no choice.
+#[derive(Default)]
+pub struct DialogState {
+    pub quit_confirm: bool,
+    pub quit_yes: bool,
+    pub test_confirm: bool,
+    pub test_confirm_yes: bool,
+}
+
+pub struct App {
+    pub screen: Screen,
+    pub game: GameState,
+    pub settings: Settings,
+    pub menu: MenuState,
+    pub dialog: DialogState,
     pub scroll_word: usize,
     pub last_width: u16,
     pub last_height: u16,
     pub history: Vec<HistoryEntry>,
     pub history_scroll: usize,
     pub should_quit: bool,
-    pub quit_confirm: bool,
-    pub quit_yes: bool,
-    pub test_confirm: bool,
-    pub test_confirm_yes: bool,
     pub settings_state: SettingsState,
     pub sound: Option<SoundPlayer>,
     pub session_start: Instant,
@@ -114,23 +127,22 @@ impl App {
             screen: Screen::Menu,
             game,
             settings,
-            menu_mode: Mode::Time(30),
-            menu_time_idx: 1,
-            menu_word_idx: 2,
-            custom_input: None,
-            custom_time_val: 45,
-            custom_words_val: 75,
-            lang_picker: None,
+            menu: MenuState {
+                mode: Mode::Time(30),
+                time_idx: 1,
+                word_idx: 2,
+                custom_input: None,
+                custom_time_val: 45,
+                custom_words_val: 75,
+                lang_picker: None,
+            },
+            dialog: DialogState::default(),
             scroll_word: 0,
             last_width: 80,
             last_height: 24,
             history: crate::history::load_history(history_expiry),
             history_scroll: 0,
             should_quit: false,
-            quit_confirm: false,
-            quit_yes: false,
-            test_confirm: false,
-            test_confirm_yes: false,
             settings_state: SettingsState {
                 cursor: 0,
                 pending_exit: false,
@@ -147,15 +159,15 @@ impl App {
     }
 
     pub fn is_custom_slot(&self) -> bool {
-        match self.menu_mode {
-            Mode::Time(_) => self.menu_time_idx == TIME_OPTIONS.len(),
-            Mode::Words(_) => self.menu_word_idx == WORD_OPTIONS.len(),
+        match self.menu.mode {
+            Mode::Time(_) => self.menu.time_idx == TIME_OPTIONS.len(),
+            Mode::Words(_) => self.menu.word_idx == WORD_OPTIONS.len(),
             Mode::Quote => false,
         }
     }
 
     fn start_test(&mut self) {
-        let mode = self.menu_mode;
+        let mode = self.menu.mode;
         let quotes = std::mem::take(&mut self.game.all_quotes);
         self.game = GameState::new(mode, self.settings.clone(), quotes);
         self.begin_replay();
@@ -187,41 +199,43 @@ impl App {
             self.should_quit = true;
             return;
         }
-        if self.quit_confirm {
+        if self.dialog.quit_confirm {
             match key.code {
-                KeyCode::Left | KeyCode::Right | KeyCode::Tab => self.quit_yes = !self.quit_yes,
+                KeyCode::Left | KeyCode::Right | KeyCode::Tab => {
+                    self.dialog.quit_yes = !self.dialog.quit_yes
+                }
                 KeyCode::Enter => {
-                    if self.quit_yes {
+                    if self.dialog.quit_yes {
                         self.should_quit = true;
                     } else {
-                        self.quit_confirm = false;
-                        self.quit_yes = false;
+                        self.dialog.quit_confirm = false;
+                        self.dialog.quit_yes = false;
                     }
                 }
                 KeyCode::Esc => {
-                    self.quit_confirm = false;
-                    self.quit_yes = false;
+                    self.dialog.quit_confirm = false;
+                    self.dialog.quit_yes = false;
                 }
                 _ => {}
             }
             return;
         }
-        if self.test_confirm {
+        if self.dialog.test_confirm {
             match key.code {
                 KeyCode::Left | KeyCode::Right | KeyCode::Tab => {
-                    self.test_confirm_yes = !self.test_confirm_yes
+                    self.dialog.test_confirm_yes = !self.dialog.test_confirm_yes
                 }
                 KeyCode::Enter => {
-                    let go = self.test_confirm_yes;
-                    self.test_confirm = false;
-                    self.test_confirm_yes = false;
+                    let go = self.dialog.test_confirm_yes;
+                    self.dialog.test_confirm = false;
+                    self.dialog.test_confirm_yes = false;
                     if go {
                         self.screen = Screen::Menu;
                     }
                 }
                 KeyCode::Esc => {
-                    self.test_confirm = false;
-                    self.test_confirm_yes = false;
+                    self.dialog.test_confirm = false;
+                    self.dialog.test_confirm_yes = false;
                 }
                 _ => {}
             }
@@ -240,10 +254,18 @@ impl App {
     pub fn tick(&mut self) {
         if self.screen == Screen::Test {
             self.game.tick();
-            if self.game.is_finished() {
-                self.save_result();
-                self.screen = Screen::Result;
-            }
+            self.maybe_finish();
+        }
+    }
+
+    /// Single completion path: if the game has finished, persist the result and
+    /// switch to the Result screen. Called from both `tick` (time mode) and after
+    /// a keystroke in `handle_test` (word/quote completion). Idempotent — the
+    /// `result_saved` guard in `save_result` prevents double-saving.
+    pub(super) fn maybe_finish(&mut self) {
+        if self.game.is_finished() {
+            self.save_result();
+            self.screen = Screen::Result;
         }
     }
 

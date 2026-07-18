@@ -58,14 +58,14 @@ pub fn draw(f: &mut Frame, app: &App) {
         crate::app::Screen::Settings => settings::draw_settings(f, app),
     }
 
-    if app.lang_picker.is_some() {
+    if app.menu.lang_picker.is_some() {
         help::draw_lang_picker(f, app);
     }
-    if app.quit_confirm {
-        draw_confirm(f, "quit?", app.quit_yes);
+    if app.dialog.quit_confirm {
+        draw_confirm(f, "quit?", app.dialog.quit_yes);
     }
-    if app.test_confirm {
-        draw_confirm(f, "abandon test?", app.test_confirm_yes);
+    if app.dialog.test_confirm {
+        draw_confirm(f, "abandon test?", app.dialog.test_confirm_yes);
     }
 }
 

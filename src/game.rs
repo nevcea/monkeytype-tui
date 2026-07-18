@@ -212,7 +212,8 @@ impl GameState {
             .filter(|(_, q)| filter.matches(q.length))
             .map(|(i, _)| i)
             .collect();
-        // Fall back to the full list if the filter matched nothing.
+        // ponytail: fall back to the full list if the filter matched nothing,
+        // rather than surfacing an empty-selection error to the user.
         if pool.is_empty() {
             pool = (0..self.all_quotes.len()).collect();
         }
@@ -428,6 +429,8 @@ impl GameState {
     }
 
     pub fn elapsed(&self) -> Duration {
+        // ponytail: afk_secs is a display-only stat; it is deliberately NOT
+        // subtracted from the WPM timing window (matches monkeytype behavior).
         match (self.started_at, self.finished_at) {
             (Some(s), Some(e)) => e.duration_since(s),
             (Some(s), None) => s.elapsed(),
@@ -568,6 +571,8 @@ fn words_to_chars(words: &[String]) -> Vec<TypedChar> {
 
 const PUNCT_SENTENCE_LEN: usize = 4;
 
+// ponytail: sentence/comma insertion ratios are fixed constants rather than a
+// user-tunable intensity — good enough for typing practice, no config surface.
 fn apply_punctuation(words: Vec<String>, rng: &mut impl Rng) -> Vec<String> {
     let endings = ['.', '!', '?'];
     let n = words.len();

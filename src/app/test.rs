@@ -12,8 +12,8 @@ impl App {
         match key.code {
             KeyCode::Esc => {
                 if self.game.started_at.is_some() {
-                    self.test_confirm = true;
-                    self.test_confirm_yes = false;
+                    self.dialog.test_confirm = true;
+                    self.dialog.test_confirm_yes = false;
                 } else {
                     self.screen = Screen::Menu;
                 }
@@ -31,8 +31,7 @@ impl App {
                 self.game.type_char(c);
                 self.update_scroll();
                 if self.game.is_finished() {
-                    self.save_result();
-                    self.screen = Screen::Result;
+                    self.maybe_finish();
                 } else if let Some(s) = &self.sound {
                     if self.game.last_char_correct() {
                         s.play_correct();

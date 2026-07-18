@@ -23,7 +23,7 @@ impl App {
     }
 
     fn handle_menu_lang_picker(&mut self, key: KeyEvent) -> bool {
-        let Some(ref mut picker) = self.lang_picker else {
+        let Some(ref mut picker) = self.menu.lang_picker else {
             return false;
         };
         let filtered = filtered_languages(&picker.search);
@@ -68,10 +68,10 @@ impl App {
                         picker.size_idx.min(lang.sizes.len().saturating_sub(1));
                     self.game.all_quotes = load_quotes_for(lang.name);
                 }
-                self.lang_picker = None;
+                self.menu.lang_picker = None;
             }
             KeyCode::Esc => {
-                self.lang_picker = None;
+                self.menu.lang_picker = None;
             }
             KeyCode::Backspace => {
                 picker.search.pop();
@@ -91,45 +91,46 @@ impl App {
     }
 
     fn handle_menu_custom_input(&mut self, key: KeyEvent) -> bool {
-        if self.custom_input.is_none() {
+        if self.menu.custom_input.is_none() {
             return false;
         }
         match key.code {
             KeyCode::Char(c) if c.is_ascii_digit() => {
-                let s = self.custom_input.as_mut().unwrap();
+                let s = self.menu.custom_input.as_mut().unwrap();
                 if s.len() < CUSTOM_INPUT_MAX_LEN {
                     s.push(c);
                 }
             }
             KeyCode::Backspace => {
-                self.custom_input.as_mut().unwrap().pop();
+                self.menu.custom_input.as_mut().unwrap().pop();
             }
             KeyCode::Enter => {
-                let s = self.custom_input.as_deref().unwrap_or("");
+                let s = self.menu.custom_input.as_deref().unwrap_or("");
                 if s.is_empty() {
                     return true;
                 }
                 let val: u64 = self
+                    .menu
                     .custom_input
                     .take()
                     .unwrap_or_default()
                     .parse()
                     .unwrap_or(0);
-                match self.menu_mode {
+                match self.menu.mode {
                     Mode::Time(_) => {
-                        self.custom_time_val = val.clamp(1, CUSTOM_TIME_MAX);
-                        self.menu_mode = Mode::Time(self.custom_time_val);
+                        self.menu.custom_time_val = val.clamp(1, CUSTOM_TIME_MAX);
+                        self.menu.mode = Mode::Time(self.menu.custom_time_val);
                     }
                     Mode::Words(_) => {
-                        self.custom_words_val = (val as usize).clamp(1, CUSTOM_WORDS_MAX);
-                        self.menu_mode = Mode::Words(self.custom_words_val);
+                        self.menu.custom_words_val = (val as usize).clamp(1, CUSTOM_WORDS_MAX);
+                        self.menu.mode = Mode::Words(self.menu.custom_words_val);
                     }
                     _ => {}
                 }
                 self.start_test();
             }
             KeyCode::Esc => {
-                self.custom_input = None;
+                self.menu.custom_input = None;
             }
             _ => {}
         }
@@ -139,30 +140,30 @@ impl App {
     fn handle_menu_main(&mut self, key: KeyEvent) {
         match key.code {
             KeyCode::Char('1') => {
-                self.menu_mode = Mode::Time(
+                self.menu.mode = Mode::Time(
                     TIME_OPTIONS
-                        .get(self.menu_time_idx)
+                        .get(self.menu.time_idx)
                         .copied()
-                        .unwrap_or(self.custom_time_val),
+                        .unwrap_or(self.menu.custom_time_val),
                 )
             }
             KeyCode::Char('2') => {
-                self.menu_mode = Mode::Words(
+                self.menu.mode = Mode::Words(
                     WORD_OPTIONS
-                        .get(self.menu_word_idx)
+                        .get(self.menu.word_idx)
                         .copied()
-                        .unwrap_or(self.custom_words_val),
+                        .unwrap_or(self.menu.custom_words_val),
                 )
             }
-            KeyCode::Char('3') => self.menu_mode = Mode::Quote,
+            KeyCode::Char('3') => self.menu.mode = Mode::Quote,
 
             KeyCode::Left => self.step_menu(false),
             KeyCode::Right => self.step_menu(true),
 
             KeyCode::Enter | KeyCode::Tab => {
                 if self.is_custom_slot() {
-                    self.custom_input = Some(String::new());
-                } else if matches!(self.menu_mode, Mode::Quote) && self.game.all_quotes.is_empty() {
+                    self.menu.custom_input = Some(String::new());
+                } else if matches!(self.menu.mode, Mode::Quote) && self.game.all_quotes.is_empty() {
                     // no-op: warning already shown in UI
                 } else {
                     self.start_test();
@@ -181,46 +182,48 @@ impl App {
                 self.screen = Screen::Settings;
             }
             KeyCode::Char('l') | KeyCode::Char('L') => {
-                self.lang_picker = Some(LangPicker::new(
+                self.menu.lang_picker = Some(LangPicker::new(
                     self.settings.lang_idx,
                     self.settings.size_idx,
                 ));
             }
             KeyCode::Char('h') | KeyCode::Char('H') => self.screen = Screen::History,
             KeyCode::Char('?') => self.screen = Screen::Help,
-            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => self.quit_confirm = true,
+            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
+                self.dialog.quit_confirm = true
+            }
             _ => {}
         }
     }
 
     fn step_menu(&mut self, forward: bool) {
-        match self.menu_mode {
+        match self.menu.mode {
             Mode::Time(_) => {
-                let idx = &mut self.menu_time_idx;
+                let idx = &mut self.menu.time_idx;
                 if forward && *idx < TIME_OPTIONS.len() {
                     *idx += 1;
                 } else if !forward {
                     *idx = idx.saturating_sub(1);
                 }
-                self.menu_mode = Mode::Time(
+                self.menu.mode = Mode::Time(
                     TIME_OPTIONS
                         .get(*idx)
                         .copied()
-                        .unwrap_or(self.custom_time_val),
+                        .unwrap_or(self.menu.custom_time_val),
                 );
             }
             Mode::Words(_) => {
-                let idx = &mut self.menu_word_idx;
+                let idx = &mut self.menu.word_idx;
                 if forward && *idx < WORD_OPTIONS.len() {
                     *idx += 1;
                 } else if !forward {
                     *idx = idx.saturating_sub(1);
                 }
-                self.menu_mode = Mode::Words(
+                self.menu.mode = Mode::Words(
                     WORD_OPTIONS
                         .get(*idx)
                         .copied()
-                        .unwrap_or(self.custom_words_val),
+                        .unwrap_or(self.menu.custom_words_val),
                 );
             }
             Mode::Quote => {
