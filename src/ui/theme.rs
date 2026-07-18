@@ -17,7 +17,8 @@ pub struct Theme {
     pub sub: Color,
 }
 
-/// Built-in themes. Index 0 is the default; `Settings::theme_idx` selects one.
+/// Built-in themes. Index 0 is the default; `Settings::theme_name` selects one
+/// (see `theme_by_name`), and `all_themes()` appends any user-defined themes.
 pub const THEMES: &[Theme] = &[
     Theme {
         name: "serika",
