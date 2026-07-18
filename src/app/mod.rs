@@ -119,21 +119,33 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let settings = Settings::default();
-        let quotes = load_quotes_for("english");
-        let game = GameState::new(Mode::Time(30), settings.clone(), quotes);
+        let cfg = crate::config::load_config();
+        let settings = cfg.settings;
+        // Load quotes for the persisted language so quote mode works immediately.
+        let lang = LANGUAGES
+            .get(settings.lang_idx)
+            .map(|l| l.name)
+            .unwrap_or("english");
+        let quotes = load_quotes_for(lang);
+        let game = GameState::new(cfg.mode, settings.clone(), quotes);
         let history_expiry = settings.history_expiry;
+        // Apply persisted sound preferences on top of the default player.
+        let sound = SoundPlayer::new().map(|mut s| {
+            s.pack = cfg.sound_pack;
+            s.set_volume_pct(cfg.volume_pct);
+            s
+        });
         Self {
             screen: Screen::Menu,
             game,
             settings,
             menu: MenuState {
-                mode: Mode::Time(30),
-                time_idx: 1,
-                word_idx: 2,
+                mode: cfg.mode,
+                time_idx: cfg.menu_time_idx,
+                word_idx: cfg.menu_word_idx,
                 custom_input: None,
-                custom_time_val: 45,
-                custom_words_val: 75,
+                custom_time_val: cfg.custom_time_val,
+                custom_words_val: cfg.custom_words_val,
                 lang_picker: None,
             },
             dialog: DialogState::default(),
@@ -149,13 +161,36 @@ impl App {
                 snapshot: None,
                 volume_input: None,
             },
-            sound: SoundPlayer::new(),
+            sound,
             session_start: Instant::now(),
             result_session_secs: 0,
             pb: pb::load_pb(),
             is_new_pb: false,
             result_saved: false,
         }
+    }
+
+    /// Persist the current settings, menu selection, and sound preferences to
+    /// `config.json`. Called at commit points (mode/language/toggle changes and
+    /// settings-screen exits) so preferences survive a restart.
+    pub(super) fn persist(&self) {
+        // ponytail: when no audio device is present we can't read live sound
+        // prefs, so fall back to sensible defaults rather than clobbering to Off.
+        let (pack, vol) = self
+            .sound
+            .as_ref()
+            .map(|s| (s.pack, s.volume_pct))
+            .unwrap_or((SoundPack::Click, DEFAULT_VOLUME_PCT));
+        crate::config::save_config(&crate::config::PersistedConfig {
+            settings: self.settings.clone(),
+            sound_pack: pack,
+            volume_pct: vol,
+            mode: self.menu.mode,
+            menu_time_idx: self.menu.time_idx,
+            menu_word_idx: self.menu.word_idx,
+            custom_time_val: self.menu.custom_time_val,
+            custom_words_val: self.menu.custom_words_val,
+        });
     }
 
     pub fn is_custom_slot(&self) -> bool {
@@ -170,6 +205,8 @@ impl App {
         let mode = self.menu.mode;
         let quotes = std::mem::take(&mut self.game.all_quotes);
         self.game = GameState::new(mode, self.settings.clone(), quotes);
+        // Remember the chosen mode/menu selection for next launch.
+        self.persist();
         self.begin_replay();
     }
 

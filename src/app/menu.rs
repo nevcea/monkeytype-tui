@@ -67,6 +67,7 @@ impl App {
                     self.settings.size_idx =
                         picker.size_idx.min(lang.sizes.len().saturating_sub(1));
                     self.game.all_quotes = load_quotes_for(lang.name);
+                    self.persist();
                 }
                 self.menu.lang_picker = None;
             }
@@ -171,10 +172,12 @@ impl App {
             }
 
             KeyCode::Char('p') | KeyCode::Char('P') => {
-                self.settings.punctuation = !self.settings.punctuation
+                self.settings.punctuation = !self.settings.punctuation;
+                self.persist();
             }
             KeyCode::Char('n') | KeyCode::Char('N') => {
-                self.settings.numbers = !self.settings.numbers
+                self.settings.numbers = !self.settings.numbers;
+                self.persist();
             }
             KeyCode::Char('s') | KeyCode::Char('S') => {
                 self.settings_state.cursor = 0;

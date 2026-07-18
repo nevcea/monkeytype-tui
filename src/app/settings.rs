@@ -98,12 +98,18 @@ impl App {
                 };
             }
             5 => {
-                let n = crate::ui::THEMES.len();
-                self.settings.theme_idx = if rev {
-                    (self.settings.theme_idx + n - 1) % n
+                let names: Vec<&str> = crate::ui::THEMES.iter().map(|t| t.name).collect();
+                let n = names.len();
+                let cur = names
+                    .iter()
+                    .position(|&nm| nm == self.settings.theme_name)
+                    .unwrap_or(0);
+                let next = if rev {
+                    (cur + n - 1) % n
                 } else {
-                    (self.settings.theme_idx + 1) % n
+                    (cur + 1) % n
                 };
+                self.settings.theme_name = names[next].to_string();
             }
             _ => {}
         }
@@ -132,6 +138,7 @@ impl App {
                 self.history_scroll = self
                     .history_scroll
                     .min(self.history.len().saturating_sub(1));
+                self.persist();
             }
             KeyCode::Char('n') if self.settings_state.pending_exit => {
                 self.settings_state.pending_exit = false;
@@ -145,6 +152,7 @@ impl App {
                     self.history_scroll = self
                         .history_scroll
                         .min(self.history.len().saturating_sub(1));
+                    self.persist();
                 }
             }
             KeyCode::Esc => {
@@ -169,6 +177,7 @@ impl App {
                 if unchanged {
                     self.settings_state.snapshot = None;
                     self.screen = Screen::Menu;
+                    self.persist();
                 } else {
                     self.settings_state.pending_exit = !self.settings_state.pending_exit;
                 }

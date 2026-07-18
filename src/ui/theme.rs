@@ -77,9 +77,18 @@ thread_local! {
     static ACTIVE_THEME: std::cell::Cell<Theme> = const { std::cell::Cell::new(THEMES[0]) };
 }
 
-pub(super) fn set_active_theme(idx: usize) {
-    let t = THEMES.get(idx).copied().unwrap_or(THEMES[0]);
-    ACTIVE_THEME.with(|c| c.set(t));
+/// Resolve a theme by name, falling back to the first built-in when the name is
+/// empty or no longer present (e.g. a persisted theme that was removed).
+pub fn theme_by_name(name: &str) -> Theme {
+    THEMES
+        .iter()
+        .find(|t| t.name == name)
+        .copied()
+        .unwrap_or(THEMES[0])
+}
+
+pub(super) fn set_active_theme(name: &str) {
+    ACTIVE_THEME.with(|c| c.set(theme_by_name(name)));
 }
 
 fn theme() -> Theme {

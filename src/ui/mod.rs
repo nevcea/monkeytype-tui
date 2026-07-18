@@ -22,7 +22,7 @@ use theme::*;
 // ── entry ─────────────────────────────────────────────────────────────────────
 
 pub fn draw(f: &mut Frame, app: &App) {
-    set_active_theme(app.settings.theme_idx);
+    set_active_theme(&app.settings.theme_name);
 
     let bg = Block::default().style(Style::default().bg(th_bg()));
     f.render_widget(bg, f.area());
