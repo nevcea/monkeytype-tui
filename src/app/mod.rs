@@ -32,6 +32,7 @@ pub const MIN_HEIGHT: u16 = 20;
 pub const TIME_OPTIONS: &[u64] = &[15, 30, 60, 120];
 pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100];
 pub const LANG_PICKER_VISIBLE: usize = 12;
+pub const THEME_PICKER_VISIBLE: usize = 12;
 
 const DEFAULT_VOLUME_PCT: u8 = 25;
 
@@ -52,11 +53,44 @@ pub fn filtered_languages(search: &str) -> Vec<(usize, &'static LangDef)> {
         .collect()
 }
 
+pub fn filtered_themes(search: &str) -> Vec<(usize, &'static crate::ui::Theme)> {
+    let needle = search.to_lowercase();
+    crate::ui::all_themes()
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.name.to_lowercase().contains(&needle))
+        .collect()
+}
+
 pub struct LangPicker {
     pub cursor: usize,
     pub size_idx: usize,
     pub scroll: usize,
     pub search: String,
+}
+
+/// Theme-picker overlay state. Moving the cursor live-applies the highlighted
+/// theme (`settings.theme_name`); `original` restores it if the user cancels.
+pub struct ThemePicker {
+    pub cursor: usize,
+    pub scroll: usize,
+    pub search: String,
+    pub original: String,
+}
+
+impl ThemePicker {
+    fn new(current: &str) -> Self {
+        let cursor = crate::ui::all_themes()
+            .iter()
+            .position(|t| t.name == current)
+            .unwrap_or(0);
+        Self {
+            cursor,
+            scroll: cursor.saturating_sub(4),
+            search: String::new(),
+            original: current.to_string(),
+        }
+    }
 }
 
 impl LangPicker {
@@ -84,6 +118,7 @@ pub struct MenuState {
     pub custom_time_val: u64,
     pub custom_words_val: usize,
     pub lang_picker: Option<LangPicker>,
+    pub theme_picker: Option<ThemePicker>,
 }
 
 /// Modal-dialog state (quit / abandon-test confirmations) with each dialog's
@@ -147,6 +182,7 @@ impl App {
                 custom_time_val: cfg.custom_time_val,
                 custom_words_val: cfg.custom_words_val,
                 lang_picker: None,
+                theme_picker: None,
             },
             dialog: DialogState::default(),
             scroll_word: 0,

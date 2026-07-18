@@ -98,18 +98,18 @@ impl App {
                 };
             }
             5 => {
-                let names: Vec<&str> = crate::ui::THEMES.iter().map(|t| t.name).collect();
-                let n = names.len();
-                let cur = names
+                let themes = crate::ui::all_themes();
+                let n = themes.len();
+                let cur = themes
                     .iter()
-                    .position(|&nm| nm == self.settings.theme_name)
+                    .position(|t| t.name == self.settings.theme_name)
                     .unwrap_or(0);
                 let next = if rev {
                     (cur + n - 1) % n
                 } else {
                     (cur + 1) % n
                 };
-                self.settings.theme_name = names[next].to_string();
+                self.settings.theme_name = themes[next].name.to_string();
             }
             _ => {}
         }

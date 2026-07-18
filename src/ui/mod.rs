@@ -16,8 +16,8 @@ mod settings;
 mod test_screen;
 mod theme;
 
-pub use theme::THEMES;
 use theme::*;
+pub use theme::{Theme, all_themes, theme_by_name};
 
 // ── entry ─────────────────────────────────────────────────────────────────────
 
@@ -60,6 +60,9 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     if app.menu.lang_picker.is_some() {
         help::draw_lang_picker(f, app);
+    }
+    if app.menu.theme_picker.is_some() {
+        help::draw_theme_picker(f, app);
     }
     if app.dialog.quit_confirm {
         draw_confirm(f, "quit?", app.dialog.quit_yes);

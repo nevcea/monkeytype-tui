@@ -1,7 +1,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{
-    App, LANG_PICKER_VISIBLE, LangPicker, Screen, TIME_OPTIONS, WORD_OPTIONS, filtered_languages,
+    App, LANG_PICKER_VISIBLE, LangPicker, Screen, THEME_PICKER_VISIBLE, TIME_OPTIONS, ThemePicker,
+    WORD_OPTIONS, filtered_languages, filtered_themes,
 };
 use crate::game::Mode;
 use crate::words::load_quotes_for;
@@ -16,10 +17,75 @@ impl App {
         if self.handle_menu_lang_picker(key) {
             return;
         }
+        if self.handle_menu_theme_picker(key) {
+            return;
+        }
         if self.handle_menu_custom_input(key) {
             return;
         }
         self.handle_menu_main(key);
+    }
+
+    fn handle_menu_theme_picker(&mut self, key: KeyEvent) -> bool {
+        let Some(ref mut picker) = self.menu.theme_picker else {
+            return false;
+        };
+        let filtered = filtered_themes(&picker.search);
+        let flen = filtered.len();
+        // Live-apply the currently highlighted theme so the whole UI previews it.
+        let apply_preview = |app: &mut App| {
+            if let Some(p) = &app.menu.theme_picker {
+                let filtered = filtered_themes(&p.search);
+                if let Some(&(_, t)) = filtered.get(p.cursor) {
+                    app.settings.theme_name = t.name.to_string();
+                }
+            }
+        };
+        match key.code {
+            KeyCode::Up => {
+                if picker.cursor > 0 {
+                    picker.cursor -= 1;
+                    if picker.cursor < picker.scroll {
+                        picker.scroll = picker.cursor;
+                    }
+                }
+                apply_preview(self);
+            }
+            KeyCode::Down => {
+                if picker.cursor + 1 < flen {
+                    picker.cursor += 1;
+                    if picker.cursor >= picker.scroll + THEME_PICKER_VISIBLE {
+                        picker.scroll = picker.cursor + 1 - THEME_PICKER_VISIBLE;
+                    }
+                }
+                apply_preview(self);
+            }
+            KeyCode::Enter => {
+                // Preview already applied; keep it and persist.
+                self.menu.theme_picker = None;
+                self.persist();
+            }
+            KeyCode::Esc => {
+                // Restore the theme that was active before opening the picker.
+                let original = picker.original.clone();
+                self.settings.theme_name = original;
+                self.menu.theme_picker = None;
+            }
+            KeyCode::Backspace => {
+                picker.search.pop();
+                picker.cursor = 0;
+                picker.scroll = 0;
+                apply_preview(self);
+            }
+            KeyCode::Char(c) => {
+                picker.search.push(c);
+                picker.cursor = 0;
+                picker.scroll = 0;
+                apply_preview(self);
+            }
+            _ => {}
+        }
+        true
     }
 
     fn handle_menu_lang_picker(&mut self, key: KeyEvent) -> bool {
@@ -189,6 +255,9 @@ impl App {
                     self.settings.lang_idx,
                     self.settings.size_idx,
                 ));
+            }
+            KeyCode::Char('t') | KeyCode::Char('T') => {
+                self.menu.theme_picker = Some(ThemePicker::new(&self.settings.theme_name));
             }
             KeyCode::Char('h') | KeyCode::Char('H') => self.screen = Screen::History,
             KeyCode::Char('?') => self.screen = Screen::Help,
