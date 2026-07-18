@@ -1,5 +1,6 @@
 use rand::prelude::IndexedRandom;
 use rand::{Rng, RngExt};
+use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
 use crate::history::HistoryExpiry;
@@ -32,7 +33,7 @@ pub struct TypedChar {
     pub state: CharState,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Mode {
     Time(u64),
     Words(usize),
@@ -50,7 +51,7 @@ impl std::fmt::Display for Mode {
 }
 
 cycle_enum! {
-    #[derive(Clone, Copy, PartialEq)]
+    #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
     pub enum CursorShape {
         Bar = "bar",
         Block = "block",
@@ -60,7 +61,7 @@ cycle_enum! {
 }
 
 cycle_enum! {
-    #[derive(Clone, Copy, PartialEq)]
+    #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
     pub enum QuoteFilter {
         All = "all",
         Short = "short",   // ≤ 100 chars
@@ -84,7 +85,7 @@ impl QuoteFilter {
 }
 
 cycle_enum! {
-    #[derive(Clone, Copy, PartialEq, Debug)]
+    #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
     pub enum Difficulty {
         Normal = "normal",
         Expert = "expert",
@@ -93,7 +94,12 @@ cycle_enum! {
     default = Normal;
 }
 
-#[derive(Clone, Default, PartialEq)]
+/// Fallback theme when a persisted `theme_name` no longer resolves. Kept as a
+/// bare string so the pure `game` layer stays free of any `ui` dependency.
+pub const DEFAULT_THEME: &str = "serika";
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[serde(default)]
 pub struct Settings {
     pub punctuation: bool,
     pub numbers: bool,
@@ -103,7 +109,23 @@ pub struct Settings {
     pub history_expiry: HistoryExpiry,
     pub difficulty: Difficulty,
     pub quote_filter: QuoteFilter,
-    pub theme_idx: usize,
+    pub theme_name: String,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            punctuation: false,
+            numbers: false,
+            lang_idx: 0,
+            size_idx: 0,
+            cursor_shape: CursorShape::default(),
+            history_expiry: HistoryExpiry::default(),
+            difficulty: Difficulty::default(),
+            quote_filter: QuoteFilter::default(),
+            theme_name: DEFAULT_THEME.to_string(),
+        }
+    }
 }
 
 pub struct GameState {
@@ -212,7 +234,8 @@ impl GameState {
             .filter(|(_, q)| filter.matches(q.length))
             .map(|(i, _)| i)
             .collect();
-        // Fall back to the full list if the filter matched nothing.
+        // ponytail: fall back to the full list if the filter matched nothing,
+        // rather than surfacing an empty-selection error to the user.
         if pool.is_empty() {
             pool = (0..self.all_quotes.len()).collect();
         }
@@ -428,6 +451,8 @@ impl GameState {
     }
 
     pub fn elapsed(&self) -> Duration {
+        // ponytail: afk_secs is a display-only stat; it is deliberately NOT
+        // subtracted from the WPM timing window (matches monkeytype behavior).
         match (self.started_at, self.finished_at) {
             (Some(s), Some(e)) => e.duration_since(s),
             (Some(s), None) => s.elapsed(),
@@ -568,6 +593,8 @@ fn words_to_chars(words: &[String]) -> Vec<TypedChar> {
 
 const PUNCT_SENTENCE_LEN: usize = 4;
 
+// ponytail: sentence/comma insertion ratios are fixed constants rather than a
+// user-tunable intensity — good enough for typing practice, no config surface.
 fn apply_punctuation(words: Vec<String>, rng: &mut impl Rng) -> Vec<String> {
     let endings = ['.', '!', '?'];
     let n = words.len();

@@ -32,6 +32,7 @@ pub const MIN_HEIGHT: u16 = 20;
 pub const TIME_OPTIONS: &[u64] = &[15, 30, 60, 120];
 pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100];
 pub const LANG_PICKER_VISIBLE: usize = 12;
+pub const THEME_PICKER_VISIBLE: usize = 12;
 
 const DEFAULT_VOLUME_PCT: u8 = 25;
 
@@ -52,11 +53,44 @@ pub fn filtered_languages(search: &str) -> Vec<(usize, &'static LangDef)> {
         .collect()
 }
 
+pub fn filtered_themes(search: &str) -> Vec<(usize, &'static crate::ui::Theme)> {
+    let needle = search.to_lowercase();
+    crate::ui::all_themes()
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| t.name.to_lowercase().contains(&needle))
+        .collect()
+}
+
 pub struct LangPicker {
     pub cursor: usize,
     pub size_idx: usize,
     pub scroll: usize,
     pub search: String,
+}
+
+/// Theme-picker overlay state. Moving the cursor live-applies the highlighted
+/// theme (`settings.theme_name`); `original` restores it if the user cancels.
+pub struct ThemePicker {
+    pub cursor: usize,
+    pub scroll: usize,
+    pub search: String,
+    pub original: String,
+}
+
+impl ThemePicker {
+    fn new(current: &str) -> Self {
+        let cursor = crate::ui::all_themes()
+            .iter()
+            .position(|t| t.name == current)
+            .unwrap_or(0);
+        Self {
+            cursor,
+            scroll: cursor.saturating_sub(4),
+            search: String::new(),
+            original: current.to_string(),
+        }
+    }
 }
 
 impl LangPicker {
@@ -74,27 +108,41 @@ impl LangPicker {
     }
 }
 
-pub struct App {
-    pub screen: Screen,
-    pub game: GameState,
-    pub settings: Settings,
-    pub menu_mode: Mode,
-    pub menu_time_idx: usize,
-    pub menu_word_idx: usize,
+/// Menu-screen selection state: which mode/option is highlighted, the pending
+/// custom-value input, and the language-picker overlay.
+pub struct MenuState {
+    pub mode: Mode,
+    pub time_idx: usize,
+    pub word_idx: usize,
     pub custom_input: Option<String>,
     pub custom_time_val: u64,
     pub custom_words_val: usize,
     pub lang_picker: Option<LangPicker>,
+    pub theme_picker: Option<ThemePicker>,
+}
+
+/// Modal-dialog state (quit / abandon-test confirmations) with each dialog's
+/// currently highlighted yes/no choice.
+#[derive(Default)]
+pub struct DialogState {
+    pub quit_confirm: bool,
+    pub quit_yes: bool,
+    pub test_confirm: bool,
+    pub test_confirm_yes: bool,
+}
+
+pub struct App {
+    pub screen: Screen,
+    pub game: GameState,
+    pub settings: Settings,
+    pub menu: MenuState,
+    pub dialog: DialogState,
     pub scroll_word: usize,
     pub last_width: u16,
     pub last_height: u16,
     pub history: Vec<HistoryEntry>,
     pub history_scroll: usize,
     pub should_quit: bool,
-    pub quit_confirm: bool,
-    pub quit_yes: bool,
-    pub test_confirm: bool,
-    pub test_confirm_yes: bool,
     pub settings_state: SettingsState,
     pub sound: Option<SoundPlayer>,
     pub session_start: Instant,
@@ -106,38 +154,50 @@ pub struct App {
 
 impl App {
     pub fn new() -> Self {
-        let settings = Settings::default();
-        let quotes = load_quotes_for("english");
-        let game = GameState::new(Mode::Time(30), settings.clone(), quotes);
+        let cfg = crate::config::load_config();
+        let settings = cfg.settings;
+        // Load quotes for the persisted language so quote mode works immediately.
+        let lang = LANGUAGES
+            .get(settings.lang_idx)
+            .map(|l| l.name)
+            .unwrap_or("english");
+        let quotes = load_quotes_for(lang);
+        let game = GameState::new(cfg.mode, settings.clone(), quotes);
         let history_expiry = settings.history_expiry;
+        // Apply persisted sound preferences on top of the default player.
+        let sound = SoundPlayer::new().map(|mut s| {
+            s.pack = cfg.sound_pack;
+            s.set_volume_pct(cfg.volume_pct);
+            s
+        });
         Self {
             screen: Screen::Menu,
             game,
             settings,
-            menu_mode: Mode::Time(30),
-            menu_time_idx: 1,
-            menu_word_idx: 2,
-            custom_input: None,
-            custom_time_val: 45,
-            custom_words_val: 75,
-            lang_picker: None,
+            menu: MenuState {
+                mode: cfg.mode,
+                time_idx: cfg.menu_time_idx,
+                word_idx: cfg.menu_word_idx,
+                custom_input: None,
+                custom_time_val: cfg.custom_time_val,
+                custom_words_val: cfg.custom_words_val,
+                lang_picker: None,
+                theme_picker: None,
+            },
+            dialog: DialogState::default(),
             scroll_word: 0,
             last_width: 80,
             last_height: 24,
             history: crate::history::load_history(history_expiry),
             history_scroll: 0,
             should_quit: false,
-            quit_confirm: false,
-            quit_yes: false,
-            test_confirm: false,
-            test_confirm_yes: false,
             settings_state: SettingsState {
                 cursor: 0,
                 pending_exit: false,
                 snapshot: None,
                 volume_input: None,
             },
-            sound: SoundPlayer::new(),
+            sound,
             session_start: Instant::now(),
             result_session_secs: 0,
             pb: pb::load_pb(),
@@ -146,18 +206,43 @@ impl App {
         }
     }
 
+    /// Persist the current settings, menu selection, and sound preferences to
+    /// `config.json`. Called at commit points (mode/language/toggle changes and
+    /// settings-screen exits) so preferences survive a restart.
+    pub(super) fn persist(&self) {
+        // ponytail: when no audio device is present we can't read live sound
+        // prefs, so fall back to sensible defaults rather than clobbering to Off.
+        let (pack, vol) = self
+            .sound
+            .as_ref()
+            .map(|s| (s.pack, s.volume_pct))
+            .unwrap_or((SoundPack::Click, DEFAULT_VOLUME_PCT));
+        crate::config::save_config(&crate::config::PersistedConfig {
+            settings: self.settings.clone(),
+            sound_pack: pack,
+            volume_pct: vol,
+            mode: self.menu.mode,
+            menu_time_idx: self.menu.time_idx,
+            menu_word_idx: self.menu.word_idx,
+            custom_time_val: self.menu.custom_time_val,
+            custom_words_val: self.menu.custom_words_val,
+        });
+    }
+
     pub fn is_custom_slot(&self) -> bool {
-        match self.menu_mode {
-            Mode::Time(_) => self.menu_time_idx == TIME_OPTIONS.len(),
-            Mode::Words(_) => self.menu_word_idx == WORD_OPTIONS.len(),
+        match self.menu.mode {
+            Mode::Time(_) => self.menu.time_idx == TIME_OPTIONS.len(),
+            Mode::Words(_) => self.menu.word_idx == WORD_OPTIONS.len(),
             Mode::Quote => false,
         }
     }
 
     fn start_test(&mut self) {
-        let mode = self.menu_mode;
+        let mode = self.menu.mode;
         let quotes = std::mem::take(&mut self.game.all_quotes);
         self.game = GameState::new(mode, self.settings.clone(), quotes);
+        // Remember the chosen mode/menu selection for next launch.
+        self.persist();
         self.begin_replay();
     }
 
@@ -187,41 +272,43 @@ impl App {
             self.should_quit = true;
             return;
         }
-        if self.quit_confirm {
+        if self.dialog.quit_confirm {
             match key.code {
-                KeyCode::Left | KeyCode::Right | KeyCode::Tab => self.quit_yes = !self.quit_yes,
+                KeyCode::Left | KeyCode::Right | KeyCode::Tab => {
+                    self.dialog.quit_yes = !self.dialog.quit_yes
+                }
                 KeyCode::Enter => {
-                    if self.quit_yes {
+                    if self.dialog.quit_yes {
                         self.should_quit = true;
                     } else {
-                        self.quit_confirm = false;
-                        self.quit_yes = false;
+                        self.dialog.quit_confirm = false;
+                        self.dialog.quit_yes = false;
                     }
                 }
                 KeyCode::Esc => {
-                    self.quit_confirm = false;
-                    self.quit_yes = false;
+                    self.dialog.quit_confirm = false;
+                    self.dialog.quit_yes = false;
                 }
                 _ => {}
             }
             return;
         }
-        if self.test_confirm {
+        if self.dialog.test_confirm {
             match key.code {
                 KeyCode::Left | KeyCode::Right | KeyCode::Tab => {
-                    self.test_confirm_yes = !self.test_confirm_yes
+                    self.dialog.test_confirm_yes = !self.dialog.test_confirm_yes
                 }
                 KeyCode::Enter => {
-                    let go = self.test_confirm_yes;
-                    self.test_confirm = false;
-                    self.test_confirm_yes = false;
+                    let go = self.dialog.test_confirm_yes;
+                    self.dialog.test_confirm = false;
+                    self.dialog.test_confirm_yes = false;
                     if go {
                         self.screen = Screen::Menu;
                     }
                 }
                 KeyCode::Esc => {
-                    self.test_confirm = false;
-                    self.test_confirm_yes = false;
+                    self.dialog.test_confirm = false;
+                    self.dialog.test_confirm_yes = false;
                 }
                 _ => {}
             }
@@ -240,10 +327,18 @@ impl App {
     pub fn tick(&mut self) {
         if self.screen == Screen::Test {
             self.game.tick();
-            if self.game.is_finished() {
-                self.save_result();
-                self.screen = Screen::Result;
-            }
+            self.maybe_finish();
+        }
+    }
+
+    /// Single completion path: if the game has finished, persist the result and
+    /// switch to the Result screen. Called from both `tick` (time mode) and after
+    /// a keystroke in `handle_test` (word/quote completion). Idempotent — the
+    /// `result_saved` guard in `save_result` prevents double-saving.
+    pub(super) fn maybe_finish(&mut self) {
+        if self.game.is_finished() {
+            self.save_result();
+            self.screen = Screen::Result;
         }
     }
 

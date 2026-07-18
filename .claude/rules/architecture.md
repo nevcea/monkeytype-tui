@@ -24,7 +24,7 @@ paths:
 | `app/{menu,test,result,history,settings,help}.rs` | One file per screen holding that screen's `App::handle_*` input-routing methods (e.g. `handle_menu`, `handle_test`) |
 | `game.rs` | `GameState`: pure typing logic (WPM/accuracy/timers). No I/O |
 | `ui/mod.rs` | Entry point (`draw()`) that dispatches to per-screen submodules based on `App::screen`, plus layout helpers. Reads `App` + `GameState`, never mutates them |
-| `ui/theme.rs` | `Theme` palette (selected via `Settings::theme_idx`) and the per-frame `th_*()` color accessors used by every `ui/*` screen |
+| `ui/theme.rs` | `Theme` palette (built-ins plus user themes loaded from `data_dir()/themes/*.json`, selected via `Settings::theme_name`) and the per-frame `th_*()` color accessors used by every `ui/*` screen |
 | `ui/{menu,test_screen,result,history,help,settings}.rs` | One file per screen (`draw_menu`, `draw_test`, etc.), plus `help.rs` for the language picker overlay |
 | `words.rs` | `LANGUAGES` static: word lists embedded at compile time via `include_str!`, cached per (lang, size). Also contains `load_quotes_for` |
 | `pb.rs` | Personal best persistence (keyed by mode+lang) to `pb.json` |

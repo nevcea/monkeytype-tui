@@ -4,7 +4,7 @@ use std::f32::consts::PI;
 use std::num::NonZero;
 
 cycle_enum! {
-    #[derive(Clone, Copy, PartialEq)]
+    #[derive(Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
     pub enum SoundPack {
         Off = "off",
         Click = "click",

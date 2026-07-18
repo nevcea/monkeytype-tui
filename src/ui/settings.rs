@@ -42,12 +42,8 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         ),
         (
             "theme",
-            THEMES
-                .get(app.settings.theme_idx)
-                .unwrap_or(&THEMES[0])
-                .name
-                .into(),
-            app.settings.theme_idx != 0,
+            theme_by_name(&app.settings.theme_name).name.into(),
+            app.settings.theme_name != crate::game::DEFAULT_THEME,
         ),
     ];
 
@@ -99,7 +95,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
                 .unwrap_or(false),
             app.settings.history_expiry != snap.history_expiry,
             app.settings.difficulty != snap.difficulty,
-            app.settings.theme_idx != snap.theme_idx,
+            app.settings.theme_name != snap.theme_name,
         ]
     } else {
         [false; 6]
@@ -124,7 +120,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         .iter()
         .enumerate()
         .map(|(i, (label, val, active))| {
-            let unavailable = (i == 3 || i == 4) && app.sound.is_none();
+            let unavailable = (i == 1 || i == 2) && app.sound.is_none();
             let cursor = if i == app.settings_state.cursor && !unavailable {
                 Span::styled("> ", Style::default().fg(th_accent()))
             } else {

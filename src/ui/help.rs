@@ -6,7 +6,9 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph},
 };
 
-use crate::app::{App, LANG_PICKER_VISIBLE, filtered_languages};
+use crate::app::{
+    App, LANG_PICKER_VISIBLE, THEME_PICKER_VISIBLE, filtered_languages, filtered_themes,
+};
 use crate::game::Mode;
 use crate::words::LANGUAGES;
 
@@ -52,6 +54,7 @@ pub(super) fn draw_help(f: &mut Frame) {
             row("← / →", "change option value"),
             row("enter", "start test  (or open custom input)"),
             row("l", "open language picker"),
+            row("t", "open theme picker"),
             row("p", "toggle punctuation"),
             row("n", "toggle numbers"),
             row("s", "settings  (sound, volume, …)"),
@@ -75,6 +78,12 @@ pub(super) fn draw_help(f: &mut Frame) {
             row("← / →", "change word pool size"),
             row("enter", "confirm selection"),
             row("esc", "cancel"),
+            Line::from(""),
+            sec("── theme picker ────────────────────────────────"),
+            row("↑ / ↓", "preview themes live"),
+            row("type", "search by name"),
+            row("enter", "keep theme"),
+            row("esc", "cancel  (restore previous)"),
         ]),
         body_a,
     );
@@ -88,7 +97,7 @@ pub(super) fn draw_help(f: &mut Frame) {
 }
 
 pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
-    let picker = match &app.lang_picker {
+    let picker = match &app.menu.lang_picker {
         Some(p) => p,
         None => return,
     };
@@ -180,7 +189,7 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
                     spans.push(Span::styled("  ", Style::default()));
                 }
             }
-            if matches!(app.menu_mode, Mode::Quote) && lang.quotes.is_none() {
+            if matches!(app.menu.mode, Mode::Quote) && lang.quotes.is_none() {
                 spans.push(Span::styled("  no quotes", Style::default().fg(th_wrong())));
             }
             Line::from(spans)
@@ -203,6 +212,122 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
             sep(),
             kh("←/→"),
             Span::raw(" size"),
+            sep(),
+            kh("enter"),
+            Span::raw(" select"),
+            sep(),
+            kh("esc"),
+            Span::raw(" cancel"),
+            Span::styled(scroll_info, Style::default().fg(th_dim())),
+        ]))
+        .style(Style::default().fg(th_dim()))
+        .alignment(Alignment::Center),
+        footer_a,
+    );
+}
+
+pub(super) fn draw_theme_picker(f: &mut Frame, app: &App) {
+    let picker = match &app.menu.theme_picker {
+        Some(p) => p,
+        None => return,
+    };
+    const VISIBLE: usize = THEME_PICKER_VISIBLE;
+
+    let filtered = filtered_themes(&picker.search);
+
+    let area = centered_rect(54, 75, f.area());
+    f.render_widget(Clear, area);
+    f.render_widget(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(th_dim()))
+            .title(Span::styled(
+                " theme ",
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD),
+            ))
+            .style(Style::default().bg(th_bg())),
+        area,
+    );
+
+    let inner = Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    };
+
+    let [search_a, _, list_a, _, footer_a] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(inner)[..] else {
+        return;
+    };
+
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                format!("▶ {}_", picker.search),
+                Style::default().fg(th_fg()),
+            ),
+            Span::styled(
+                format!(" ({}/{})", filtered.len(), all_themes().len()),
+                Style::default().fg(th_dim()),
+            ),
+        ])),
+        search_a,
+    );
+
+    // Each row previews the theme's own palette via colored swatches, so the
+    // list is legible even before live-applying the highlighted theme.
+    let swatch = |c| Span::styled("███", Style::default().fg(c));
+    let rows: Vec<Line> = filtered
+        .iter()
+        .enumerate()
+        .skip(picker.scroll)
+        .take(VISIBLE)
+        .map(|(fi, (_, t))| {
+            let selected = fi == picker.cursor;
+            let name_style = if selected {
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(th_fg())
+            };
+            let prefix = if selected { "▶ " } else { "  " };
+            Line::from(vec![
+                Span::styled(prefix, Style::default().fg(th_accent())),
+                Span::styled(format!("{:<16}", t.name), name_style),
+                swatch(t.accent),
+                Span::raw(" "),
+                swatch(t.correct),
+                Span::raw(" "),
+                swatch(t.wrong),
+                Span::raw(" "),
+                swatch(t.sub),
+            ])
+        })
+        .collect();
+
+    f.render_widget(Paragraph::new(rows), list_a);
+
+    let total = filtered.len();
+    let scroll_info = if total > VISIBLE {
+        format!(" {}/{total} ", picker.cursor + 1)
+    } else {
+        String::new()
+    };
+
+    f.render_widget(
+        Paragraph::new(Line::from(vec![
+            kh("↑/↓"),
+            Span::raw(" navigate"),
             sep(),
             kh("enter"),
             Span::raw(" select"),

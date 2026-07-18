@@ -16,13 +16,13 @@ mod settings;
 mod test_screen;
 mod theme;
 
-pub use theme::THEMES;
 use theme::*;
+pub use theme::{Theme, all_themes, theme_by_name};
 
 // ── entry ─────────────────────────────────────────────────────────────────────
 
 pub fn draw(f: &mut Frame, app: &App) {
-    set_active_theme(app.settings.theme_idx);
+    set_active_theme(&app.settings.theme_name);
 
     let bg = Block::default().style(Style::default().bg(th_bg()));
     f.render_widget(bg, f.area());
@@ -58,14 +58,17 @@ pub fn draw(f: &mut Frame, app: &App) {
         crate::app::Screen::Settings => settings::draw_settings(f, app),
     }
 
-    if app.lang_picker.is_some() {
+    if app.menu.lang_picker.is_some() {
         help::draw_lang_picker(f, app);
     }
-    if app.quit_confirm {
-        draw_confirm(f, "quit?", app.quit_yes);
+    if app.menu.theme_picker.is_some() {
+        help::draw_theme_picker(f, app);
     }
-    if app.test_confirm {
-        draw_confirm(f, "abandon test?", app.test_confirm_yes);
+    if app.dialog.quit_confirm {
+        draw_confirm(f, "quit?", app.dialog.quit_yes);
+    }
+    if app.dialog.test_confirm {
+        draw_confirm(f, "abandon test?", app.dialog.test_confirm_yes);
     }
 }
 

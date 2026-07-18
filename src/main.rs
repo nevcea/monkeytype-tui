@@ -1,6 +1,7 @@
 #[macro_use]
 mod macros;
 mod app;
+mod config;
 mod game;
 mod history;
 mod pb;
