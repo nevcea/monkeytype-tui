@@ -14,7 +14,10 @@ use std::{io, time::Duration};
 
 use crossterm::{
     cursor::SetCursorStyle,
-    event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEventKind},
+    event::{
+        self, DisableBracketedPaste, DisableMouseCapture, EnableBracketedPaste, EnableMouseCapture,
+        Event, KeyCode, KeyEventKind,
+    },
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -33,7 +36,12 @@ impl Drop for TerminalGuard {
 /// Best-effort terminal restoration, safe to call from a panic hook.
 fn restore_terminal() {
     let _ = disable_raw_mode();
-    let _ = execute!(io::stdout(), DisableBracketedPaste, LeaveAlternateScreen);
+    let _ = execute!(
+        io::stdout(),
+        DisableMouseCapture,
+        DisableBracketedPaste,
+        LeaveAlternateScreen
+    );
 }
 
 fn main() -> io::Result<()> {
@@ -47,12 +55,51 @@ fn main() -> io::Result<()> {
     }));
 
     enable_raw_mode()?;
-    execute!(io::stdout(), EnterAlternateScreen, EnableBracketedPaste)?;
+    // Mouse capture routes drag/click to the app instead of the terminal's own
+    // selection, so text can't be highlighted and copied out of the test.
+    execute!(
+        io::stdout(),
+        EnterAlternateScreen,
+        EnableBracketedPaste,
+        EnableMouseCapture
+    )?;
     let _guard = TerminalGuard;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.show_cursor()?;
     run(&mut terminal)
+}
+
+/// Input poll interval; also the window over which a burst is measured.
+const POLL_MS: u64 = 50;
+/// Cap on one drain so a huge paste can't stall rendering.
+const MAX_BATCH: usize = 256;
+/// Printable keys queued *simultaneously* that mark a batch as a paste rather
+/// than typing. Crossterm never reports `Event::Paste` on Windows (its console
+/// input source only produces Key/Mouse/Resize), so Ctrl+V shows up as a burst
+/// of synthetic key presses and this count is the only signal left. Six chars
+/// inside one `POLL_MS` window is ~1400 WPM — unreachable by hand.
+const PASTE_BURST_CHARS: usize = 6;
+
+/// Read every event already queued, so a batch reflects what arrived together.
+fn drain_events() -> io::Result<Vec<Event>> {
+    let mut batch = Vec::new();
+    while batch.len() < MAX_BATCH && event::poll(Duration::ZERO)? {
+        batch.push(event::read()?);
+    }
+    Ok(batch)
+}
+
+/// Whether a batch is a paste and should be discarded whole.
+fn is_paste_burst(batch: &[Event]) -> bool {
+    batch
+        .iter()
+        .filter(|e| {
+            matches!(e, Event::Key(k)
+                if k.kind == KeyEventKind::Press && matches!(k.code, KeyCode::Char(_)))
+        })
+        .count()
+        >= PASTE_BURST_CHARS
 }
 
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
@@ -74,15 +121,19 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
         };
         execute!(terminal.backend_mut(), cursor_style)?;
 
-        if event::poll(Duration::from_millis(50))? {
-            match event::read()? {
-                Event::Key(key) if key.kind == KeyEventKind::Press => app.on_key(key),
-                // Redraw immediately on resize instead of waiting for the poll timeout.
-                Event::Resize(_, _) => continue,
-                // Bracketed paste (enabled above) arrives here as a single Paste
-                // event rather than a burst of Key events, so dropping it blocks
-                // pasting into the typing test without any extra state.
-                _ => {}
+        if event::poll(Duration::from_millis(POLL_MS))? {
+            let batch = drain_events()?;
+            if !is_paste_burst(&batch) {
+                for ev in batch {
+                    // On unix, bracketed paste arrives as a single Paste event
+                    // and is dropped here; `is_paste_burst` covers Windows,
+                    // where crossterm's console input source never emits one.
+                    if let Event::Key(key) = ev
+                        && key.kind == KeyEventKind::Press
+                    {
+                        app.on_key(key);
+                    }
+                }
             }
         }
 
@@ -91,5 +142,33 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
         if app.should_quit {
             return Ok(());
         }
+    }
+}
+
+#[cfg(test)]
+mod paste_tests {
+    use super::*;
+    use crossterm::event::{KeyEvent, KeyModifiers};
+
+    fn chars(s: &str) -> Vec<Event> {
+        s.chars()
+            .map(|c| Event::Key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE)))
+            .collect()
+    }
+
+    #[test]
+    fn a_burst_of_queued_chars_is_treated_as_a_paste() {
+        assert!(is_paste_burst(&chars("pasted text")));
+    }
+
+    #[test]
+    fn a_few_queued_chars_are_treated_as_typing() {
+        assert!(!is_paste_burst(&chars("ab")));
+    }
+
+    #[test]
+    fn non_char_keys_never_form_a_burst() {
+        let held = vec![Event::Key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)); 20];
+        assert!(!is_paste_burst(&held));
     }
 }

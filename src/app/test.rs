@@ -30,6 +30,10 @@ impl App {
                 }
                 self.update_scroll();
             }
+            // Ctrl+<letter> combos (e.g. a terminal that delivers Ctrl+V as a
+            // literal keystroke instead of a bracketed-paste event) must not
+            // be typed into the test as if they were plain characters.
+            KeyCode::Char(_) if key.modifiers.contains(KeyModifiers::CONTROL) => {}
             KeyCode::Char(c) => {
                 self.game.type_char(c);
                 self.update_scroll();
