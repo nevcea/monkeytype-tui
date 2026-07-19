@@ -55,6 +55,31 @@ pub fn write_atomic(path: &Path, contents: &str) {
     }
 }
 
+/// Read `name` from [`data_dir`] and deserialize it. Returns `T::default()`
+/// when there is no data dir, the file is missing, or its contents are
+/// malformed — persistence is best-effort and must never fail a startup.
+pub fn load_json<T: serde::de::DeserializeOwned + Default>(name: &str) -> T {
+    let Some(path) = data_dir().map(|d| d.join(name)) else {
+        return T::default();
+    };
+    let Ok(data) = std::fs::read_to_string(&path) else {
+        return T::default();
+    };
+    serde_json::from_str(&data).unwrap_or_default()
+}
+
+/// Serialize `value` as pretty JSON and write it to `name` in [`data_dir`] via
+/// [`write_atomic`]. Silently does nothing if there is no data dir or the
+/// value can't be serialized.
+pub fn save_json<T: serde::Serialize>(name: &str, value: &T) {
+    let Some(path) = data_dir().map(|d| d.join(name)) else {
+        return;
+    };
+    if let Ok(json) = serde_json::to_string_pretty(value) {
+        write_atomic(&path, &json);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -99,5 +124,48 @@ mod tests {
     #[test]
     fn data_dir_returns_some_path_under_normal_env() {
         assert!(data_dir().is_some());
+    }
+
+    /// `load_json` backs every persisted file (config, pb, history). A missing
+    /// or hand-corrupted file must degrade to `Default` rather than propagate
+    /// an error — a broken config.json must not stop the app from starting.
+    #[test]
+    fn load_json_falls_back_to_default_on_missing_and_corrupt_files() {
+        #[derive(serde::Deserialize, PartialEq, Debug)]
+        struct Sample {
+            n: u32,
+        }
+        impl Default for Sample {
+            fn default() -> Self {
+                Self { n: 7 }
+            }
+        }
+
+        // Missing file.
+        let missing: Sample = load_json("definitely-not-a-real-file-xyz.json");
+        assert_eq!(missing, Sample::default());
+
+        // Corrupt file: write garbage into the real data dir, then read it back.
+        let name = "monkeytype-tui-test-corrupt.json";
+        let path = data_dir().unwrap().join(name);
+        write_atomic(&path, "{ this is not json");
+        let corrupt: Sample = load_json(name);
+        assert_eq!(corrupt, Sample::default());
+
+        // Well-formed file round-trips instead of silently defaulting.
+        write_atomic(&path, r#"{"n": 42}"#);
+        let good: Sample = load_json(name);
+        assert_eq!(good, Sample { n: 42 });
+
+        std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn save_json_writes_readable_json() {
+        let name = "monkeytype-tui-test-savejson.json";
+        save_json(name, &vec![1u8, 2, 3]);
+        let back: Vec<u8> = load_json(name);
+        assert_eq!(back, vec![1, 2, 3]);
+        std::fs::remove_file(data_dir().unwrap().join(name)).unwrap();
     }
 }

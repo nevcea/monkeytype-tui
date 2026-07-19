@@ -2,7 +2,6 @@
 //! load/save pattern as `history`/`pb`, reusing `storage::{data_dir,write_atomic}`.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 
 use crate::game::{Mode, Settings};
 use crate::sound::SoundPack;
@@ -43,19 +42,11 @@ impl Default for PersistedConfig {
     }
 }
 
-fn config_path() -> Option<PathBuf> {
-    Some(crate::storage::data_dir()?.join("config.json"))
-}
+const CONFIG_FILE: &str = "config.json";
 
 pub fn load_config() -> PersistedConfig {
-    let Some(path) = config_path() else {
-        return PersistedConfig::default();
-    };
-    let Ok(data) = std::fs::read_to_string(&path) else {
-        return PersistedConfig::default();
-    };
     // Unknown/missing fields fall back to Default thanks to `#[serde(default)]`.
-    sanitize(serde_json::from_str(&data).unwrap_or_default())
+    sanitize(crate::storage::load_json(CONFIG_FILE))
 }
 
 /// Clamp values a hand-edited `config.json` could set out of range. A zero
@@ -72,10 +63,7 @@ fn sanitize(mut cfg: PersistedConfig) -> PersistedConfig {
 }
 
 pub fn save_config(cfg: &PersistedConfig) {
-    let Some(path) = config_path() else { return };
-    if let Ok(json) = serde_json::to_string_pretty(cfg) {
-        crate::storage::write_atomic(&path, &json);
-    }
+    crate::storage::save_json(CONFIG_FILE, cfg);
 }
 
 #[cfg(test)]

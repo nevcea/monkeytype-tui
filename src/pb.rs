@@ -3,7 +3,6 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PbEntry {
@@ -13,25 +12,14 @@ pub struct PbEntry {
 
 pub type PersonalBests = HashMap<String, PbEntry>;
 
-fn pb_path() -> Option<PathBuf> {
-    Some(crate::storage::data_dir()?.join("pb.json"))
-}
+const PB_FILE: &str = "pb.json";
 
 pub fn load_pb() -> PersonalBests {
-    let Some(path) = pb_path() else {
-        return HashMap::new();
-    };
-    let Ok(data) = std::fs::read_to_string(&path) else {
-        return HashMap::new();
-    };
-    serde_json::from_str(&data).unwrap_or_default()
+    crate::storage::load_json(PB_FILE)
 }
 
 pub fn save_pb(pb: &PersonalBests) {
-    let Some(path) = pb_path() else { return };
-    if let Ok(json) = serde_json::to_string_pretty(pb) {
-        crate::storage::write_atomic(&path, &json);
-    }
+    crate::storage::save_json(PB_FILE, pb);
 }
 
 /// Returns true if this result is a new personal best.

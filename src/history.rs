@@ -3,7 +3,6 @@
 //! [`HistoryExpiry`] on load.
 
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const HISTORY_LIMIT: usize = 50;
@@ -68,19 +67,11 @@ impl HistoryEntry {
     }
 }
 
-fn history_path() -> Option<PathBuf> {
-    Some(crate::storage::data_dir()?.join("history.json"))
-}
+const HISTORY_FILE: &str = "history.json";
 
 /// Every entry on disk, unfiltered. Missing/malformed files read as empty.
 fn read_all() -> Vec<HistoryEntry> {
-    let Some(path) = history_path() else {
-        return vec![];
-    };
-    let Ok(data) = std::fs::read_to_string(&path) else {
-        return vec![];
-    };
-    serde_json::from_str(&data).unwrap_or_default()
+    crate::storage::load_json(HISTORY_FILE)
 }
 
 pub fn load_history(expiry: HistoryExpiry) -> Vec<HistoryEntry> {
@@ -108,10 +99,7 @@ pub fn save_entry(entry: HistoryEntry, history: &mut Vec<HistoryEntry>) {
     let all = merged_for_disk(&entry, read_all());
     history.insert(0, entry);
     history.truncate(HISTORY_LIMIT);
-    let Some(path) = history_path() else { return };
-    if let Ok(json) = serde_json::to_string_pretty(&all) {
-        crate::storage::write_atomic(&path, &json);
-    }
+    crate::storage::save_json(HISTORY_FILE, &all);
 }
 
 #[cfg(test)]
