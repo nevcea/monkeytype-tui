@@ -171,8 +171,7 @@ impl App {
             KeyCode::Right => {
                 let max = filtered
                     .get(picker.cursor)
-                    .map(|(_, l)| l.sizes.len().saturating_sub(1))
-                    .unwrap_or(0);
+                    .map_or(0, |(_, l)| l.sizes.len().saturating_sub(1));
                 if picker.size_idx < max {
                     picker.size_idx += 1;
                 }
@@ -287,33 +286,31 @@ impl App {
                 }
             }
 
-            KeyCode::Char('p') | KeyCode::Char('P') => {
+            KeyCode::Char('p' | 'P') => {
                 self.settings.punctuation = !self.settings.punctuation;
                 self.persist();
             }
-            KeyCode::Char('n') | KeyCode::Char('N') => {
+            KeyCode::Char('n' | 'N') => {
                 self.settings.numbers = !self.settings.numbers;
                 self.persist();
             }
-            KeyCode::Char('s') | KeyCode::Char('S') => {
+            KeyCode::Char('s' | 'S') => {
                 self.settings_state.cursor = 0;
                 self.settings_state.snapshot = Some(self.make_settings_snapshot());
                 self.screen = Screen::Settings;
             }
-            KeyCode::Char('l') | KeyCode::Char('L') => {
+            KeyCode::Char('l' | 'L') => {
                 self.menu.lang_picker = Some(LangPicker::new(
                     self.settings.lang_idx,
                     self.settings.size_idx,
                 ));
             }
-            KeyCode::Char('t') | KeyCode::Char('T') => {
+            KeyCode::Char('t' | 'T') => {
                 self.menu.theme_picker = Some(ThemePicker::new(&self.settings.theme_name));
             }
-            KeyCode::Char('h') | KeyCode::Char('H') => self.screen = Screen::History,
+            KeyCode::Char('h' | 'H') => self.screen = Screen::History,
             KeyCode::Char('?') => self.screen = Screen::Help,
-            KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => {
-                self.dialog.quit_confirm = true
-            }
+            KeyCode::Char('q' | 'Q') | KeyCode::Esc => self.dialog.quit_confirm = true,
             _ => {}
         }
     }

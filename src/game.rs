@@ -472,8 +472,7 @@ impl GameState {
             Mode::Words(_) | Mode::Quote => self.cursor >= self.chars.len(),
             Mode::Time(secs) => self
                 .started_at
-                .map(|t| t.elapsed() >= Duration::from_secs(secs))
-                .unwrap_or(false),
+                .is_some_and(|t| t.elapsed() >= Duration::from_secs(secs)),
         };
         if done {
             self.finished_at = Some(Instant::now());
@@ -498,7 +497,7 @@ impl GameState {
 
     pub fn time_left(&self) -> u64 {
         if let Mode::Time(secs) = self.mode {
-            let elapsed = self.started_at.map(|t| t.elapsed().as_secs()).unwrap_or(0);
+            let elapsed = self.started_at.map_or(0, |t| t.elapsed().as_secs());
             secs.saturating_sub(elapsed)
         } else {
             0

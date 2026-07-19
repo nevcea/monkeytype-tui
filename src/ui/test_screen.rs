@@ -167,8 +167,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
         };
         let lang = LANGUAGES
             .get(app.settings.lang_idx)
-            .map(|l| l.name)
-            .unwrap_or("english");
+            .map_or("english", |l| l.name);
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(mode_label, Style::default().fg(th_dim())),

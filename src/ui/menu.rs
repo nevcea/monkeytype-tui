@@ -19,15 +19,15 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
     let area = centered_rect(56, 30, f.area());
     let [
         title_a,
-        gap1,
+        _,
         tabs_a,
         opts_a,
-        gap2,
+        _,
         lang_a,
         size_a,
-        gap3,
+        _,
         toggles_a,
-        gap4,
+        _,
         _,
     ] = Layout::vertical([
         Constraint::Length(1), // title
@@ -57,11 +57,6 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         .alignment(Alignment::Center),
         title_a,
     );
-    let _ = gap1;
-    let _ = gap2;
-    let _ = gap3;
-    let _ = gap4;
-
     let time_label = match app.menu.mode {
         Mode::Time(n) => format!("time·{n}s"),
         _ => "time".to_owned(),

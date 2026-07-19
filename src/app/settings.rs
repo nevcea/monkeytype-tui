@@ -25,7 +25,7 @@ impl App {
             && let Ok(pct) = input.parse::<u16>()
             && let Some(s) = &mut self.sound
         {
-            s.set_volume_pct(pct.clamp(1, 100) as u8);
+            s.set_volume_pct(pct.clamp(VOLUME_MIN.into(), VOLUME_MAX.into()) as u8);
         }
     }
 
@@ -169,16 +169,11 @@ impl App {
     /// Whether the current settings + sound state match the snapshot taken
     /// when the settings screen was opened (or last saved).
     fn settings_unchanged(&self) -> bool {
-        let sound_pack = self
-            .sound
-            .as_ref()
-            .map(|s| s.pack)
-            .unwrap_or(SoundPack::Off);
+        let sound_pack = self.sound.as_ref().map_or(SoundPack::Off, |s| s.pack);
         let sound_vol = self
             .sound
             .as_ref()
-            .map(|s| s.volume_pct)
-            .unwrap_or(DEFAULT_VOLUME_PCT);
+            .map_or(DEFAULT_VOLUME_PCT, |s| s.volume_pct);
         self.settings_state
             .snapshot
             .as_ref()

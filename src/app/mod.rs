@@ -6,6 +6,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::Instant;
 use unicode_width::UnicodeWidthChar;
 
+use crate::config::DEFAULT_VOLUME_PCT;
 use crate::game::{GameState, Mode, Settings};
 use crate::history::HistoryEntry;
 use crate::pb::{self, PersonalBests};
@@ -64,8 +65,6 @@ fn handle_confirm_dialog(open: &mut bool, yes: &mut bool, key: KeyEvent) -> Dial
     }
     DialogResult::Open
 }
-
-const DEFAULT_VOLUME_PCT: u8 = 25;
 
 pub struct SettingsState {
     pub cursor: usize,
@@ -128,8 +127,7 @@ impl LangPicker {
     fn new(lang_idx: usize, size_idx: usize) -> Self {
         let max_size = LANGUAGES
             .get(lang_idx)
-            .map(|l| l.sizes.len().saturating_sub(1))
-            .unwrap_or(0);
+            .map_or(0, |l| l.sizes.len().saturating_sub(1));
         Self {
             cursor: lang_idx,
             size_idx: size_idx.min(max_size),
@@ -190,8 +188,7 @@ impl App {
         // Load quotes for the persisted language so quote mode works immediately.
         let lang = LANGUAGES
             .get(settings.lang_idx)
-            .map(|l| l.name)
-            .unwrap_or("english");
+            .map_or("english", |l| l.name);
         let quotes = load_quotes_for(lang);
         let game = GameState::new(cfg.mode, settings.clone(), quotes);
         let history_expiry = settings.history_expiry;
@@ -246,8 +243,9 @@ impl App {
         let (pack, vol) = self
             .sound
             .as_ref()
-            .map(|s| (s.pack, s.volume_pct))
-            .unwrap_or((SoundPack::Click, DEFAULT_VOLUME_PCT));
+            .map_or((SoundPack::Click, DEFAULT_VOLUME_PCT), |s| {
+                (s.pack, s.volume_pct)
+            });
         crate::config::save_config(&crate::config::PersistedConfig {
             settings: self.settings.clone(),
             sound_pack: pack,
@@ -369,8 +367,7 @@ impl App {
         let mode_str = self.game.mode.to_string();
         let lang = LANGUAGES
             .get(self.settings.lang_idx)
-            .map(|l| l.name)
-            .unwrap_or("english")
+            .map_or("english", |l| l.name)
             .to_string();
         let key = format!("{mode_str}_{lang}");
         self.is_new_pb = pb::update_pb(&mut self.pb, key, wpm, acc);
@@ -393,14 +390,10 @@ impl App {
     fn make_settings_snapshot(&self) -> (Settings, SoundPack, u8) {
         (
             self.settings.clone(),
+            self.sound.as_ref().map_or(SoundPack::Off, |s| s.pack),
             self.sound
                 .as_ref()
-                .map(|s| s.pack)
-                .unwrap_or(SoundPack::Off),
-            self.sound
-                .as_ref()
-                .map(|s| s.volume_pct)
-                .unwrap_or(DEFAULT_VOLUME_PCT),
+                .map_or(DEFAULT_VOLUME_PCT, |s| s.volume_pct),
         )
     }
 

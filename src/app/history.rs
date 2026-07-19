@@ -7,7 +7,7 @@ use super::{App, Screen};
 impl App {
     pub(super) fn handle_history(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('Q') => {
+            KeyCode::Esc | KeyCode::Char('q' | 'Q') => {
                 self.history_scroll = 0;
                 self.screen = Screen::Menu;
             }

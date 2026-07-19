@@ -49,8 +49,7 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
     let mode_str = app.game.mode.to_string();
     let lang = LANGUAGES
         .get(app.game.settings.lang_idx)
-        .map(|l| l.name)
-        .unwrap_or("unknown");
+        .map_or("unknown", |l| l.name);
 
     let [lwpm_a, lacc_a, _, ltype_a, _, lraw_a, src_a] = Layout::vertical([
         Constraint::Length(2), // wpm

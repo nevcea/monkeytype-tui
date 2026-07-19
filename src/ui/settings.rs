@@ -74,14 +74,10 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
     {
         [
             app.settings.cursor_shape != snap.cursor_shape,
+            app.sound.as_ref().is_some_and(|s| s.pack != *snap_pack),
             app.sound
                 .as_ref()
-                .map(|s| s.pack != *snap_pack)
-                .unwrap_or(false),
-            app.sound
-                .as_ref()
-                .map(|s| s.volume_pct != *snap_vol)
-                .unwrap_or(false),
+                .is_some_and(|s| s.volume_pct != *snap_vol),
             app.settings.history_expiry != snap.history_expiry,
             app.settings.difficulty != snap.difficulty,
             app.settings.theme_name != snap.theme_name,
