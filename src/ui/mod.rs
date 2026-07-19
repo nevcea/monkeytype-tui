@@ -282,6 +282,55 @@ mod render_smoke_tests {
         }
     }
 
+    fn rendered_text(app: &App) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal.draw(|f| draw(f, app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// Both pickers share one scaffold (`draw_picker`), so this pins the parts
+    /// that scaffold owns: the title, the search line with its match counter,
+    /// and the `▶` marker on the highlighted row.
+    #[test]
+    fn lang_picker_renders_title_search_counter_and_selection() {
+        let mut app = App::new();
+        app.menu.lang_picker = Some(crate::app::LangPicker {
+            cursor: 0,
+            size_idx: 0,
+            scroll: 0,
+            search: "eng".to_string(),
+        });
+        let text = rendered_text(&app);
+        assert!(text.contains("language"), "missing title: {text}");
+        assert!(text.contains("eng_"), "missing search line: {text}");
+        assert!(text.contains("english"), "missing filtered row: {text}");
+        assert!(text.contains('▶'), "missing selection marker: {text}");
+    }
+
+    #[test]
+    fn theme_picker_renders_title_and_selection() {
+        let mut app = App::new();
+        let first = all_themes()[0].name;
+        app.menu.theme_picker = Some(crate::app::ThemePicker {
+            cursor: 0,
+            scroll: 0,
+            search: String::new(),
+            original: first.to_string(),
+        });
+        let text = rendered_text(&app);
+        assert!(text.contains("theme"), "missing title: {text}");
+        assert!(text.contains(first), "missing first theme row: {text}");
+        assert!(text.contains('▶'), "missing selection marker: {text}");
+    }
+
     #[test]
     fn draw_below_min_size_shows_hint_instead_of_panicking() {
         let app = App::new();

@@ -98,22 +98,37 @@ pub(super) fn draw_help(f: &mut Frame) {
     );
 }
 
-pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
-    let picker = match &app.menu.lang_picker {
-        Some(p) => p,
-        None => return,
-    };
-    const VISIBLE: usize = LANG_PICKER_VISIBLE;
+/// Everything the shared picker chrome needs that isn't the row content.
+struct PickerChrome<'a> {
+    title: &'a str,
+    search: &'a str,
+    cursor: usize,
+    scroll: usize,
+    visible: usize,
+    /// Unfiltered total, shown as the `(matched/total)` counter.
+    total: usize,
+    /// Key hints between "navigate" and "cancel" (the language picker adds
+    /// `←/→ size`, the theme picker doesn't).
+    extra_hints: Vec<Span<'static>>,
+}
 
-    let filtered = filtered_languages(&picker.search);
-
+/// Draws the standard picker overlay — bordered popup, search line with match
+/// counter, scrolled list, and footer hints with a position indicator. Shared
+/// by the language and theme pickers, which differ only in how a row renders.
+///
+/// `row` receives each visible item and whether it is the highlighted one.
+fn draw_picker<T>(
+    f: &mut Frame,
+    chrome: &PickerChrome,
+    items: &[T],
+    row: impl Fn(&T, bool) -> Line<'static>,
+) {
     let area = centered_rect(54, 75, f.area());
-
     let inner = dialog_block(
         f,
         area,
         Some(Span::styled(
-            " language ",
+            format!(" {} ", chrome.title),
             Style::default()
                 .fg(th_accent())
                 .add_modifier(Modifier::BOLD),
@@ -134,38 +149,91 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled(
-                format!("▶ {}_", picker.search),
+                format!("▶ {}_", chrome.search),
                 Style::default().fg(th_fg()),
             ),
             Span::styled(
-                format!(" ({}/{})", filtered.len(), LANGUAGES.len()),
+                format!(" ({}/{})", items.len(), chrome.total),
                 Style::default().fg(th_dim()),
             ),
         ])),
         search_a,
     );
 
-    let visible_langs: Vec<Line> = filtered
+    let rows: Vec<Line> = items
         .iter()
         .enumerate()
-        .skip(picker.scroll)
-        .take(VISIBLE)
-        .map(|(fi, (_, lang))| {
-            let selected = fi == picker.cursor;
-            let name_style = if selected {
-                Style::default()
-                    .fg(th_accent())
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(th_fg())
-            };
-            let prefix = if selected { "▶ " } else { "  " };
+        .skip(chrome.scroll)
+        .take(chrome.visible)
+        .map(|(i, item)| row(item, i == chrome.cursor))
+        .collect();
+    f.render_widget(Paragraph::new(rows), list_a);
 
-            let mut spans = vec![
-                Span::styled(prefix, Style::default().fg(th_accent())),
-                Span::styled(format!("{:<12}", lang.name), name_style),
-                Span::styled("  ", Style::default()),
-            ];
+    let scroll_info = if items.len() > chrome.visible {
+        format!(" {}/{} ", chrome.cursor + 1, items.len())
+    } else {
+        String::new()
+    };
+
+    let mut hints = vec![kh("↑/↓"), Span::raw(" navigate"), sep()];
+    hints.extend(chrome.extra_hints.iter().cloned());
+    hints.extend([
+        kh("enter"),
+        Span::raw(" select"),
+        sep(),
+        kh("esc"),
+        Span::raw(" cancel"),
+        Span::styled(scroll_info, Style::default().fg(th_dim())),
+    ]);
+
+    f.render_widget(
+        Paragraph::new(Line::from(hints))
+            .style(Style::default().fg(th_dim()))
+            .alignment(Alignment::Center),
+        footer_a,
+    );
+}
+
+/// Row prefix + name styling shared by both pickers.
+fn picker_name(name: &str, width: usize, selected: bool) -> Vec<Span<'static>> {
+    let name_style = if selected {
+        Style::default()
+            .fg(th_accent())
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default().fg(th_fg())
+    };
+    vec![
+        Span::styled(
+            if selected { "▶ " } else { "  " },
+            Style::default().fg(th_accent()),
+        ),
+        Span::styled(format!("{name:<width$}"), name_style),
+    ]
+}
+
+pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
+    let Some(picker) = &app.menu.lang_picker else {
+        return;
+    };
+    let filtered = filtered_languages(&picker.search);
+    let quote_mode = matches!(app.menu.mode, Mode::Quote);
+
+    draw_picker(
+        f,
+        &PickerChrome {
+            title: "language",
+            search: &picker.search,
+            cursor: picker.cursor,
+            scroll: picker.scroll,
+            visible: LANG_PICKER_VISIBLE,
+            total: LANGUAGES.len(),
+            extra_hints: vec![kh("←/→"), Span::raw(" size"), sep()],
+        },
+        &filtered,
+        |(_, lang), selected| {
+            let mut spans = picker_name(lang.name, 12, selected);
+            spans.push(Span::styled("  ", Style::default()));
 
             for (si, sz) in lang.sizes.iter().enumerate() {
                 let size_style = if selected && si == picker.size_idx {
@@ -180,110 +248,39 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
                     spans.push(Span::styled("  ", Style::default()));
                 }
             }
-            if matches!(app.menu.mode, Mode::Quote) && lang.quotes.is_none() {
+            if quote_mode && lang.quotes.is_none() {
                 spans.push(Span::styled("  no quotes", Style::default().fg(th_wrong())));
             }
             Line::from(spans)
-        })
-        .collect();
-
-    f.render_widget(Paragraph::new(visible_langs), list_a);
-
-    let total = filtered.len();
-    let scroll_info = if total > VISIBLE {
-        format!(" {}/{total} ", picker.cursor + 1)
-    } else {
-        String::new()
-    };
-
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            kh("↑/↓"),
-            Span::raw(" navigate"),
-            sep(),
-            kh("←/→"),
-            Span::raw(" size"),
-            sep(),
-            kh("enter"),
-            Span::raw(" select"),
-            sep(),
-            kh("esc"),
-            Span::raw(" cancel"),
-            Span::styled(scroll_info, Style::default().fg(th_dim())),
-        ]))
-        .style(Style::default().fg(th_dim()))
-        .alignment(Alignment::Center),
-        footer_a,
+        },
     );
 }
 
 pub(super) fn draw_theme_picker(f: &mut Frame, app: &App) {
-    let picker = match &app.menu.theme_picker {
-        Some(p) => p,
-        None => return,
-    };
-    const VISIBLE: usize = THEME_PICKER_VISIBLE;
-
-    let filtered = filtered_themes(&picker.search);
-
-    let area = centered_rect(54, 75, f.area());
-    let inner = dialog_block(
-        f,
-        area,
-        Some(Span::styled(
-            " theme ",
-            Style::default()
-                .fg(th_accent())
-                .add_modifier(Modifier::BOLD),
-        )),
-    );
-
-    let [search_a, _, list_a, _, footer_a] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Min(0),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .split(inner)[..] else {
+    let Some(picker) = &app.menu.theme_picker else {
         return;
     };
-
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled(
-                format!("▶ {}_", picker.search),
-                Style::default().fg(th_fg()),
-            ),
-            Span::styled(
-                format!(" ({}/{})", filtered.len(), all_themes().len()),
-                Style::default().fg(th_dim()),
-            ),
-        ])),
-        search_a,
-    );
+    let filtered = filtered_themes(&picker.search);
 
     // Each row previews the theme's own palette via colored swatches, so the
     // list is legible even before live-applying the highlighted theme.
     let swatch = |c| Span::styled("███", Style::default().fg(c));
-    let rows: Vec<Line> = filtered
-        .iter()
-        .enumerate()
-        .skip(picker.scroll)
-        .take(VISIBLE)
-        .map(|(fi, (_, t))| {
-            let selected = fi == picker.cursor;
-            let name_style = if selected {
-                Style::default()
-                    .fg(th_accent())
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default().fg(th_fg())
-            };
-            let prefix = if selected { "▶ " } else { "  " };
-            Line::from(vec![
-                Span::styled(prefix, Style::default().fg(th_accent())),
-                Span::styled(format!("{:<16}", t.name), name_style),
+
+    draw_picker(
+        f,
+        &PickerChrome {
+            title: "theme",
+            search: &picker.search,
+            cursor: picker.cursor,
+            scroll: picker.scroll,
+            visible: THEME_PICKER_VISIBLE,
+            total: all_themes().len(),
+            extra_hints: vec![],
+        },
+        &filtered,
+        |(_, t), selected| {
+            let mut spans = picker_name(t.name, 16, selected);
+            spans.extend([
                 swatch(t.accent),
                 Span::raw(" "),
                 swatch(t.correct),
@@ -291,33 +288,8 @@ pub(super) fn draw_theme_picker(f: &mut Frame, app: &App) {
                 swatch(t.wrong),
                 Span::raw(" "),
                 swatch(t.sub),
-            ])
-        })
-        .collect();
-
-    f.render_widget(Paragraph::new(rows), list_a);
-
-    let total = filtered.len();
-    let scroll_info = if total > VISIBLE {
-        format!(" {}/{total} ", picker.cursor + 1)
-    } else {
-        String::new()
-    };
-
-    f.render_widget(
-        Paragraph::new(Line::from(vec![
-            kh("↑/↓"),
-            Span::raw(" navigate"),
-            sep(),
-            kh("enter"),
-            Span::raw(" select"),
-            sep(),
-            kh("esc"),
-            Span::raw(" cancel"),
-            Span::styled(scroll_info, Style::default().fg(th_dim())),
-        ]))
-        .style(Style::default().fg(th_dim()))
-        .alignment(Alignment::Center),
-        footer_a,
+            ]);
+            Line::from(spans)
+        },
     );
 }
