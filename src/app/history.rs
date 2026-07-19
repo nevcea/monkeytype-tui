@@ -13,7 +13,12 @@ impl App {
             }
             KeyCode::Up => self.history_scroll = self.history_scroll.saturating_sub(1),
             KeyCode::Down => {
-                let max = self.history.len().saturating_sub(1);
+                // Stop once the last row is on screen, rather than letting the
+                // list scroll until a single entry is left above empty space.
+                let max = self
+                    .history
+                    .len()
+                    .saturating_sub(self.history_visible_rows().max(1));
                 if self.history_scroll < max {
                     self.history_scroll += 1;
                 }

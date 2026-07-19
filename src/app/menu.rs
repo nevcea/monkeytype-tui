@@ -346,6 +346,7 @@ impl App {
                 } else {
                     self.settings.quote_filter.prev()
                 };
+                self.persist();
             }
         }
     }

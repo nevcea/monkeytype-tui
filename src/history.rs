@@ -35,7 +35,7 @@ impl HistoryExpiry {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct HistoryEntry {
     pub wpm: f64,
     pub accuracy: f64,
@@ -72,14 +72,19 @@ fn history_path() -> Option<PathBuf> {
     Some(crate::storage::data_dir()?.join("history.json"))
 }
 
-pub fn load_history(expiry: HistoryExpiry) -> Vec<HistoryEntry> {
+/// Every entry on disk, unfiltered. Missing/malformed files read as empty.
+fn read_all() -> Vec<HistoryEntry> {
     let Some(path) = history_path() else {
         return vec![];
     };
     let Ok(data) = std::fs::read_to_string(&path) else {
         return vec![];
     };
-    let entries: Vec<HistoryEntry> = serde_json::from_str(&data).unwrap_or_default();
+    serde_json::from_str(&data).unwrap_or_default()
+}
+
+pub fn load_history(expiry: HistoryExpiry) -> Vec<HistoryEntry> {
+    let entries = read_all();
     match expiry.cutoff_secs() {
         Some(cutoff) => entries
             .into_iter()
@@ -89,11 +94,22 @@ pub fn load_history(expiry: HistoryExpiry) -> Vec<HistoryEntry> {
     }
 }
 
+/// Prepend `entry` to the full on-disk list, capped at [`HISTORY_LIMIT`].
+fn merged_for_disk(entry: &HistoryEntry, mut on_disk: Vec<HistoryEntry>) -> Vec<HistoryEntry> {
+    on_disk.insert(0, entry.clone());
+    on_disk.truncate(HISTORY_LIMIT);
+    on_disk
+}
+
 pub fn save_entry(entry: HistoryEntry, history: &mut Vec<HistoryEntry>) {
+    // Merge into what's on disk rather than writing `history` back: `history`
+    // is the expiry-*filtered* view, so persisting it would permanently delete
+    // entries the user only asked to hide.
+    let all = merged_for_disk(&entry, read_all());
     history.insert(0, entry);
     history.truncate(HISTORY_LIMIT);
     let Some(path) = history_path() else { return };
-    if let Ok(json) = serde_json::to_string_pretty(history) {
+    if let Ok(json) = serde_json::to_string_pretty(&all) {
         crate::storage::write_atomic(&path, &json);
     }
 }
@@ -156,6 +172,23 @@ mod tests {
     #[test]
     fn expiry_off_has_no_cutoff() {
         assert!(HistoryExpiry::Off.cutoff_secs().is_none());
+    }
+
+    /// Saving must not drop entries the active expiry window hides — the
+    /// in-memory list is a filtered view, the file is the source of truth.
+    #[test]
+    fn saving_keeps_entries_hidden_by_the_expiry_filter() {
+        let expired = entry_ago(120 * 86400);
+        let merged = merged_for_disk(&entry_ago(0), vec![expired]);
+        assert_eq!(merged.len(), 2);
+        let cutoff = HistoryExpiry::Days90.cutoff_secs().unwrap();
+        assert!(merged.iter().any(|e| e.timestamp < cutoff));
+    }
+
+    #[test]
+    fn merge_caps_at_history_limit() {
+        let on_disk = vec![entry_ago(60); HISTORY_LIMIT];
+        assert_eq!(merged_for_disk(&entry_ago(0), on_disk).len(), HISTORY_LIMIT);
     }
 
     #[test]

@@ -411,6 +411,16 @@ impl App {
         self.last_width < MIN_WIDTH || self.last_height < MIN_HEIGHT
     }
 
+    /// Rows the History overlay can show at once. Mirrors `ui::history`'s
+    /// layout (an 80%-height `centered_rect` minus title, summary, header,
+    /// footer and their gaps) the same way `update_scroll` mirrors the test
+    /// screen's padding. Off-by-one from percentage rounding is harmless —
+    /// this only clamps how far the list may scroll.
+    pub fn history_visible_rows(&self) -> usize {
+        const CHROME_ROWS: usize = 6;
+        (self.last_height as usize * 80 / 100).saturating_sub(CHROME_ROWS)
+    }
+
     // ── scroll ───────────────────────────────────────────────────────────────
 
     pub fn update_scroll(&mut self) {
@@ -564,6 +574,30 @@ mod input_flow_tests {
         app.on_key(key(KeyCode::Enter));
         assert_eq!(app.screen, Screen::Menu);
         assert!(!app.dialog.test_confirm);
+    }
+
+    /// Scrolling must stop once the final entry is on screen, instead of
+    /// running to `len - 1` and leaving one row above a blank list.
+    #[test]
+    fn history_scroll_stops_when_the_last_entry_is_visible() {
+        let mut app = App::new();
+        app.screen = Screen::History;
+        app.last_height = 24;
+        let visible = app.history_visible_rows();
+        assert!(visible > 1, "layout math should leave room for rows");
+        app.history = (0..visible + 3)
+            .map(|_| HistoryEntry {
+                wpm: 0.0,
+                accuracy: 0.0,
+                mode: String::new(),
+                timestamp: 0,
+                language: String::new(),
+            })
+            .collect();
+        for _ in 0..50 {
+            app.on_key(key(KeyCode::Down));
+        }
+        assert_eq!(app.history_scroll, 3);
     }
 
     /// Opens the custom-time input slot (the entry past the last preset in

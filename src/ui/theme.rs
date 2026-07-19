@@ -227,7 +227,9 @@ struct ThemeFile {
 
 fn parse_hex(s: &str) -> Option<Color> {
     let s = s.trim().trim_start_matches('#');
-    if s.len() != 6 {
+    // `len()` counts bytes, so the ASCII check is what makes the byte-range
+    // slicing below safe: "aábcd" is 6 bytes but splits mid-char.
+    if !s.is_ascii() || s.len() != 6 {
         return None;
     }
     let r = u8::from_str_radix(&s[0..2], 16).ok()?;
@@ -362,6 +364,8 @@ mod tests {
         assert_eq!(parse_hex("#12345"), None);
         assert_eq!(parse_hex("zzzzzz"), None);
         assert_eq!(parse_hex(""), None);
+        // Six *bytes* but only five chars — must not panic on a char boundary.
+        assert_eq!(parse_hex("aábcd"), None);
     }
 
     #[test]

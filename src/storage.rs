@@ -10,9 +10,18 @@ pub fn data_dir() -> Option<PathBuf> {
     if let Some(xdg) = std::env::var_os("XDG_DATA_HOME").filter(|s| !s.is_empty()) {
         return Some(PathBuf::from(xdg).join("monkeytype-tui"));
     }
+    // APPDATA must win over HOME on Windows: Git Bash / MSYS set HOME there
+    // too, so preferring HOME would split one machine's data between
+    // `$HOME/.local/share` and `%APPDATA%` depending on which shell launched
+    // the app.
+    #[cfg(windows)]
+    if let Some(appdata) = std::env::var_os("APPDATA").filter(|s| !s.is_empty()) {
+        return Some(PathBuf::from(appdata).join("monkeytype-tui"));
+    }
     if let Some(home) = std::env::var_os("HOME").filter(|s| !s.is_empty()) {
         return Some(PathBuf::from(home).join(".local/share/monkeytype-tui"));
     }
+    #[cfg(not(windows))]
     if let Some(appdata) = std::env::var_os("APPDATA").filter(|s| !s.is_empty()) {
         return Some(PathBuf::from(appdata).join("monkeytype-tui"));
     }

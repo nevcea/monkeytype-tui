@@ -103,6 +103,9 @@ impl App {
             5 => {
                 let themes = crate::ui::all_themes();
                 let n = themes.len();
+                if n == 0 {
+                    return;
+                }
                 let cur = themes
                     .iter()
                     .position(|t| t.name == self.settings.theme_name)

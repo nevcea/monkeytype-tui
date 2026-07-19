@@ -50,7 +50,20 @@ pub fn load_config() -> PersistedConfig {
         return PersistedConfig::default();
     };
     // Unknown/missing fields fall back to Default thanks to `#[serde(default)]`.
-    serde_json::from_str(&data).unwrap_or_default()
+    sanitize(serde_json::from_str(&data).unwrap_or_default())
+}
+
+/// Clamp values a hand-edited `config.json` could set out of range. A zero
+/// time/word count would divide by zero in the progress gauge.
+fn sanitize(mut cfg: PersistedConfig) -> PersistedConfig {
+    cfg.mode = match cfg.mode {
+        Mode::Time(s) => Mode::Time(s.max(1)),
+        Mode::Words(n) => Mode::Words(n.max(1)),
+        Mode::Quote => Mode::Quote,
+    };
+    cfg.custom_time_val = cfg.custom_time_val.max(1);
+    cfg.custom_words_val = cfg.custom_words_val.max(1);
+    cfg
 }
 
 pub fn save_config(cfg: &PersistedConfig) {
@@ -88,6 +101,28 @@ mod tests {
         assert_eq!(back.volume_pct, 50);
         assert_eq!(back.mode, Mode::Time(30));
         assert_eq!(back.settings.theme_name, crate::game::DEFAULT_THEME);
+    }
+
+    /// A zero duration/word count would make the progress gauge's ratio NaN,
+    /// which `Gauge::ratio` panics on.
+    #[test]
+    fn sanitize_lifts_zero_mode_values_off_zero() {
+        let zero_time = PersistedConfig {
+            mode: Mode::Time(0),
+            custom_time_val: 0,
+            custom_words_val: 0,
+            ..PersistedConfig::default()
+        };
+        let cfg = sanitize(zero_time);
+        assert_eq!(cfg.mode, Mode::Time(1));
+        assert_eq!(cfg.custom_time_val, 1);
+        assert_eq!(cfg.custom_words_val, 1);
+
+        let zero_words = PersistedConfig {
+            mode: Mode::Words(0),
+            ..PersistedConfig::default()
+        };
+        assert_eq!(sanitize(zero_words).mode, Mode::Words(1));
     }
 
     #[test]

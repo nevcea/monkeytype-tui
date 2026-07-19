@@ -39,8 +39,10 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
     match app.game.mode {
         Mode::Time(total) => {
             let left = app.game.time_left();
+            // `.max(1)`: a zero total would make the ratio NaN, and
+            // `Gauge::ratio` asserts the value is within 0.0..=1.0.
             let ratio = if app.game.started_at.is_some() {
-                left as f64 / total as f64
+                left as f64 / total.max(1) as f64
             } else {
                 1.0
             };
@@ -61,7 +63,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             let (ratio, label) = if app.game.cursor >= app.game.chars.len() {
                 (1.0, total)
             } else {
-                ((done as f64 / total as f64).clamp(0.0, 1.0), done)
+                ((done as f64 / total.max(1) as f64).clamp(0.0, 1.0), done)
             };
             f.render_widget(
                 Gauge::default()
@@ -328,6 +330,24 @@ mod tests {
         assert_eq!(span.content, wrong.to_string());
         assert_eq!(span.style.fg, Some(th_wrong()));
         assert!(span.style.add_modifier.contains(Modifier::UNDERLINED));
+    }
+
+    /// A zero-length test (only reachable via a hand-edited `config.json`)
+    /// must not make the gauge ratio NaN — `Gauge::ratio` asserts on it.
+    #[test]
+    fn zero_length_modes_do_not_panic_the_gauge() {
+        use crate::app::{App, Screen};
+        use ratatui::Terminal;
+        use ratatui::backend::TestBackend;
+
+        for mode in [Mode::Time(0), Mode::Words(0)] {
+            let mut app = App::new();
+            app.screen = Screen::Test;
+            app.game = GameState::new(mode, Settings::default(), vec![]);
+            app.game.started_at = Some(std::time::Instant::now());
+            let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+            terminal.draw(|f| crate::ui::draw(f, &app)).unwrap();
+        }
     }
 
     /// A letter mistyped as a space renders as a middle dot rather than a
