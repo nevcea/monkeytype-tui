@@ -1,3 +1,6 @@
+//! Key handling for the Test screen: forwards typing to `GameState`, plays
+//! per-keystroke sound feedback, and triggers the leave-test confirmation.
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 use super::{App, Screen};

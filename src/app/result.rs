@@ -1,3 +1,6 @@
+//! Key handling for the Result screen: repeat the same test, restart with a
+//! fresh one, or return to the menu.
+
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{App, Screen};

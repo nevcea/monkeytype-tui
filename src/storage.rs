@@ -23,11 +23,21 @@ pub fn data_dir() -> Option<PathBuf> {
 /// over the target, so a crash mid-write can't truncate the existing file.
 /// All errors are swallowed — persistence is best-effort.
 pub fn write_atomic(path: &Path, contents: &str) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
     let Some(parent) = path.parent() else { return };
     if std::fs::create_dir_all(parent).is_err() {
         return;
     }
-    let tmp = path.with_extension("tmp");
+    // Unique per call (pid + monotonic counter) so two write_atomic calls to
+    // the same path can never race on the same tmp file.
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let unique = format!(
+        "{}-{}.tmp",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    );
+    let tmp = path.with_extension(unique);
     if std::fs::write(&tmp, contents).is_err() {
         return;
     }

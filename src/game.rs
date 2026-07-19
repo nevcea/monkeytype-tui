@@ -1,3 +1,7 @@
+//! Pure typing-test state machine: word generation, keystroke handling, and
+//! WPM/accuracy/consistency scoring. No I/O and no dependency on `ui` — the
+//! same `GameState` drives both the terminal renderer and the unit tests.
+
 use rand::prelude::IndexedRandom;
 use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
@@ -160,6 +164,7 @@ pub struct GameState {
 }
 
 impl GameState {
+    /// Build a fresh test for `mode`, immediately generating its first word set.
     pub fn new(mode: Mode, settings: Settings, quotes: Vec<QuoteEntry>) -> Self {
         let all_words = load_words(settings.lang_idx, settings.size_idx);
         let mut state = Self {
@@ -193,6 +198,8 @@ impl GameState {
         state
     }
 
+    /// Regenerate the word/quote set for the current mode and settings, and
+    /// clear all progress. Used both for a brand-new test and for "restart".
     pub fn reset(&mut self) {
         let mut rng = rand::rng();
         let (raw_words, source) = self.pick_words(&mut rng);
@@ -265,15 +272,33 @@ impl GameState {
         w
     }
 
+    /// Record a keystroke at the cursor, advance it, and apply any
+    /// difficulty rule (Expert/Master can end the test here via
+    /// [`Self::difficulty_fail`]). No-op once the test is finished.
     pub fn type_char(&mut self, c: char) {
         if self.is_finished() || self.cursor >= self.chars.len() {
             return;
         }
+        self.mark_keystroke();
+
+        let expected = self.chars[self.cursor].expected;
+        let correct = self.record_typed_char(c, expected);
+
+        if self.difficulty_violated(correct, expected) {
+            self.difficulty_fail();
+            return;
+        }
+
+        self.advance_cursor();
+    }
+
+    /// Track test-start time, total keystroke count, and accumulated AFK
+    /// time (gaps between keystrokes longer than [`AFK_THRESHOLD_SECS`]).
+    fn mark_keystroke(&mut self) {
         let now = Instant::now();
         if self.started_at.is_none() {
             self.started_at = Some(now);
         }
-        // accumulate AFK: gaps > 2s between keystrokes count as idle
         if let Some(last) = self.last_keystroke {
             let gap = now.duration_since(last).as_secs_f64();
             if gap > AFK_THRESHOLD_SECS {
@@ -282,8 +307,10 @@ impl GameState {
         }
         self.last_keystroke = Some(now);
         self.total_keystrokes += 1;
+    }
 
-        let expected = self.chars[self.cursor].expected;
+    /// Store `c` at the cursor and mark it correct/wrong. Returns whether it matched.
+    fn record_typed_char(&mut self, c: char, expected: char) -> bool {
         self.chars[self.cursor].typed = Some(c);
         let correct = c == expected;
         self.chars[self.cursor].state = if correct {
@@ -292,31 +319,32 @@ impl GameState {
             self.error_keystrokes += 1;
             CharState::Wrong
         };
+        correct
+    }
 
-        // Difficulty checks before advancing cursor
+    /// Whether the active [`Difficulty`] ends the test on this keystroke:
+    /// Expert fails on any wrong char, Master fails when a word containing
+    /// an error is completed (space typed correctly).
+    fn difficulty_violated(&self, correct: bool, expected: char) -> bool {
         match self.settings.difficulty {
-            Difficulty::Expert if !correct => {
-                self.difficulty_fail();
-                return;
-            }
-            Difficulty::Master if correct && expected == ' ' => {
-                // Typed space correctly: check if the completed word had any errors
-                if self.word_starts.is_empty() {
-                    return;
-                }
-                let w = self.word_at_cursor();
-                let word_start = self.word_starts[w];
-                let has_error = self.chars[word_start..self.cursor]
-                    .iter()
-                    .any(|c| c.state == CharState::Wrong);
-                if has_error {
-                    self.difficulty_fail();
-                    return;
-                }
-            }
-            _ => {}
+            Difficulty::Expert => !correct,
+            Difficulty::Master if correct && expected == ' ' => self.current_word_has_error(),
+            _ => false,
         }
+    }
 
+    /// Whether the word ending at the cursor contains a `Wrong` char.
+    fn current_word_has_error(&self) -> bool {
+        if self.word_starts.is_empty() {
+            return false;
+        }
+        let word_start = self.word_starts[self.word_at_cursor()];
+        self.chars[word_start..self.cursor]
+            .iter()
+            .any(|c| c.state == CharState::Wrong)
+    }
+
+    fn advance_cursor(&mut self) {
         self.cursor += 1;
         if self.cursor < self.chars.len() {
             self.chars[self.cursor].state = CharState::Current;
@@ -324,6 +352,8 @@ impl GameState {
         self.check_finished();
     }
 
+    /// Ctrl+Backspace: erase back to the start of the current word (or the
+    /// previous word if the cursor sits exactly on a word boundary).
     pub fn delete_word(&mut self) {
         if self.cursor == 0 {
             return;
@@ -351,6 +381,8 @@ impl GameState {
         }
     }
 
+    /// Restart with the exact same words/quote (used from the result screen),
+    /// as opposed to [`Self::reset`] which generates a new set.
     pub fn repeat(&mut self) {
         self.chars = words_to_chars(&self.words);
         self.word_starts = compute_word_starts(&self.words);
@@ -379,6 +411,7 @@ impl GameState {
         }
     }
 
+    /// Erase the character immediately before the cursor.
     pub fn backspace(&mut self) {
         if self.cursor == 0 {
             return;
@@ -412,6 +445,9 @@ impl GameState {
         self.last_sample_elapsed = elapsed;
     }
 
+    /// Per-frame upkeep: end a `Time` mode test once its duration elapses,
+    /// and push one WPM/accuracy sample per whole second of elapsed time
+    /// (used to compute [`Self::consistency`]).
     pub fn tick(&mut self) {
         if self.is_finished() {
             return;
@@ -477,6 +513,8 @@ impl GameState {
             .count()
     }
 
+    /// Words per minute counting only correctly-typed characters (the
+    /// number shown as the test's headline result).
     pub fn wpm(&self) -> f64 {
         let secs = self.elapsed().as_secs_f64();
         if secs < 0.1 {
@@ -485,6 +523,8 @@ impl GameState {
         (self.correct_chars() as f64 / CHARS_PER_WORD) / (secs / 60.0)
     }
 
+    /// Words per minute counting every character typed, correct or not
+    /// (unlike [`Self::wpm`], errors don't reduce this).
     pub fn raw_wpm(&self) -> f64 {
         let secs = self.elapsed().as_secs_f64();
         if secs < 0.1 {
@@ -493,6 +533,8 @@ impl GameState {
         (self.cursor as f64 / CHARS_PER_WORD) / (secs / 60.0)
     }
 
+    /// Percentage of keystrokes (not final characters) that were correct;
+    /// a corrected typo still counts as one error against the total.
     pub fn accuracy(&self) -> f64 {
         if self.total_keystrokes == 0 {
             return 100.0;
@@ -501,10 +543,13 @@ impl GameState {
             * 100.0
     }
 
+    /// Whether the test ended in failure: a difficulty-rule violation, or
+    /// final accuracy below [`FAIL_ACCURACY`].
     pub fn is_failed(&self) -> bool {
         self.difficulty_failed || self.accuracy() < FAIL_ACCURACY
     }
 
+    /// Which failure condition (if any) ended the test; `None` on a clean pass.
     pub fn fail_reason(&self) -> Option<&'static str> {
         if self.difficulty_failed {
             Some("difficulty")
@@ -522,6 +567,8 @@ impl GameState {
         self.last_sample_secs = None;
     }
 
+    /// 0-100 score from the coefficient of variation of per-second WPM
+    /// samples: steady typing scores near 100, bursty typing scores lower.
     pub fn consistency(&self) -> f64 {
         let n = self.wpm_samples.len();
         if n < 2 {
@@ -548,6 +595,7 @@ impl GameState {
                 .is_some_and(|c| c.state == CharState::Correct)
     }
 
+    /// Index of the word the cursor is currently inside (or about to start).
     pub fn word_at_cursor(&self) -> usize {
         match self.word_starts.partition_point(|&s| s <= self.cursor) {
             0 => 0,
@@ -555,6 +603,7 @@ impl GameState {
         }
     }
 
+    /// Count of completed words (spaces passed) up to the cursor.
     pub fn words_typed(&self) -> usize {
         self.chars
             .iter()

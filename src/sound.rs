@@ -1,3 +1,6 @@
+//! Keystroke/completion sound effects via `rodio`. Tones are synthesized
+//! sine-wave beeps rather than sample files, so there's nothing to bundle.
+
 use rodio::buffer::SamplesBuffer;
 use rodio::{DeviceSinkBuilder, MixerDeviceSink, Player};
 use std::f32::consts::PI;

@@ -1,3 +1,6 @@
+//! Personal-best persistence: one [`PbEntry`] per mode+language key, saved
+//! to `pb.json` via `storage::write_atomic`.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;

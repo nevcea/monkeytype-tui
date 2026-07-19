@@ -1,3 +1,6 @@
+//! Renders the Menu screen: mode/option selection plus the language and
+//! theme picker overlays.
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout},

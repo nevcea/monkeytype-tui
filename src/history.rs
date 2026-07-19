@@ -1,3 +1,7 @@
+//! Result history: persists the last [`HISTORY_LIMIT`] test results to
+//! `history.json` (via `storage::write_atomic`) and filters them by
+//! [`HistoryExpiry`] on load.
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};

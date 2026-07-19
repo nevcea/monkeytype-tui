@@ -1,3 +1,7 @@
+//! Rendering entry point: `draw()` dispatches to the per-screen submodules
+//! below based on `App::screen`. Reads `App` + `GameState`, never mutates
+//! them — all state changes happen in `app::handle_*`.
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -80,20 +84,7 @@ fn draw_confirm(f: &mut Frame, title: &str, is_yes: bool) {
         width: area.width,
         height: 5,
     };
-    f.render_widget(Clear, area);
-    f.render_widget(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(th_dim()))
-            .style(Style::default().bg(th_bg())),
-        area,
-    );
-    let inner = Rect {
-        x: area.x + 2,
-        y: area.y + 1,
-        width: area.width.saturating_sub(4),
-        height: 3,
-    };
+    let inner = dialog_block(f, area, None);
     let sel = Style::default()
         .fg(th_accent())
         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
@@ -119,6 +110,26 @@ fn draw_confirm(f: &mut Frame, title: &str, is_yes: bool) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Clears `area`, draws the standard bordered popup chrome (optionally titled),
+/// and returns the padded inner `Rect` for content.
+pub(super) fn dialog_block(f: &mut Frame, area: Rect, title: Option<Span<'static>>) -> Rect {
+    f.render_widget(Clear, area);
+    let mut block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(th_dim()))
+        .style(Style::default().bg(th_bg()));
+    if let Some(title) = title {
+        block = block.title(title);
+    }
+    f.render_widget(block, area);
+    Rect {
+        x: area.x + 2,
+        y: area.y + 1,
+        width: area.width.saturating_sub(4),
+        height: area.height.saturating_sub(2),
+    }
+}
 
 pub(super) fn pin_footer(frame: Rect, height: u16) -> Rect {
     Rect {

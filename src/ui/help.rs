@@ -1,9 +1,11 @@
+//! Renders the Help overlay (keybinding reference).
+
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::Paragraph,
 };
 
 use crate::app::{
@@ -107,27 +109,16 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
 
     let area = centered_rect(54, 75, f.area());
 
-    f.render_widget(Clear, area);
-    f.render_widget(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(th_dim()))
-            .title(Span::styled(
-                " language ",
-                Style::default()
-                    .fg(th_accent())
-                    .add_modifier(Modifier::BOLD),
-            ))
-            .style(Style::default().bg(th_bg())),
+    let inner = dialog_block(
+        f,
         area,
+        Some(Span::styled(
+            " language ",
+            Style::default()
+                .fg(th_accent())
+                .add_modifier(Modifier::BOLD),
+        )),
     );
-
-    let inner = Rect {
-        x: area.x + 2,
-        y: area.y + 1,
-        width: area.width.saturating_sub(4),
-        height: area.height.saturating_sub(2),
-    };
 
     let [search_a, _, list_a, _, footer_a] = Layout::vertical([
         Constraint::Length(1),
@@ -236,27 +227,16 @@ pub(super) fn draw_theme_picker(f: &mut Frame, app: &App) {
     let filtered = filtered_themes(&picker.search);
 
     let area = centered_rect(54, 75, f.area());
-    f.render_widget(Clear, area);
-    f.render_widget(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(th_dim()))
-            .title(Span::styled(
-                " theme ",
-                Style::default()
-                    .fg(th_accent())
-                    .add_modifier(Modifier::BOLD),
-            ))
-            .style(Style::default().bg(th_bg())),
+    let inner = dialog_block(
+        f,
         area,
+        Some(Span::styled(
+            " theme ",
+            Style::default()
+                .fg(th_accent())
+                .add_modifier(Modifier::BOLD),
+        )),
     );
-
-    let inner = Rect {
-        x: area.x + 2,
-        y: area.y + 1,
-        width: area.width.saturating_sub(4),
-        height: area.height.saturating_sub(2),
-    };
 
     let [search_a, _, list_a, _, footer_a] = Layout::vertical([
         Constraint::Length(1),

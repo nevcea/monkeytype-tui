@@ -1,3 +1,5 @@
+//! Key handling for the History overlay: scroll and dismiss.
+
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{App, Screen};

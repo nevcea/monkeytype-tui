@@ -14,7 +14,7 @@ use std::{io, time::Duration};
 
 use crossterm::{
     cursor::SetCursorStyle,
-    event::{self, Event, KeyEventKind},
+    event::{self, DisableBracketedPaste, EnableBracketedPaste, Event, KeyEventKind},
     execute,
     terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
@@ -33,7 +33,7 @@ impl Drop for TerminalGuard {
 /// Best-effort terminal restoration, safe to call from a panic hook.
 fn restore_terminal() {
     let _ = disable_raw_mode();
-    let _ = execute!(io::stdout(), LeaveAlternateScreen);
+    let _ = execute!(io::stdout(), DisableBracketedPaste, LeaveAlternateScreen);
 }
 
 fn main() -> io::Result<()> {
@@ -47,7 +47,7 @@ fn main() -> io::Result<()> {
     }));
 
     enable_raw_mode()?;
-    execute!(io::stdout(), EnterAlternateScreen)?;
+    execute!(io::stdout(), EnterAlternateScreen, EnableBracketedPaste)?;
     let _guard = TerminalGuard;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
@@ -79,6 +79,9 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
                 Event::Key(key) if key.kind == KeyEventKind::Press => app.on_key(key),
                 // Redraw immediately on resize instead of waiting for the poll timeout.
                 Event::Resize(_, _) => continue,
+                // Bracketed paste (enabled above) arrives here as a single Paste
+                // event rather than a burst of Key events, so dropping it blocks
+                // pasting into the typing test without any extra state.
                 _ => {}
             }
         }

@@ -1,9 +1,12 @@
+//! Renders the Settings screen: the editable-rows list, with sound/volume
+//! rows shown as unavailable when no audio device is present.
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::Paragraph,
 };
 
 use crate::app::App;
@@ -56,21 +59,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         height: height.min(f.area().height),
     };
 
-    f.render_widget(Clear, area);
-    f.render_widget(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(th_dim()))
-            .style(Style::default().bg(th_bg())),
-        area,
-    );
-
-    let inner = Rect {
-        x: area.x + 2,
-        y: area.y + 1,
-        width: area.width.saturating_sub(4),
-        height: area.height.saturating_sub(2),
-    };
+    let inner = dialog_block(f, area, None);
     let [title_a, _gap_a, items_a, _] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
@@ -177,4 +166,62 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
             .alignment(Alignment::Center)
     };
     f.render_widget(footer, pin_footer(f.area(), 1));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::App;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    const ROW_SOUND: usize = 1;
+    const ROW_VOLUME: usize = 2;
+    const ROW_HISTORY_EXPIRY: usize = 3;
+    const ROW_DIFFICULTY: usize = 4;
+
+    fn render_lines(app: &App) -> Vec<String> {
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal.draw(|f| draw_settings(f, app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    /// Regression test for 4ac7f07: when no audio device is available, the
+    /// sound/volume rows must render as unavailable (no `< … >` edit
+    /// indicator) while unrelated rows (history expiry/difficulty) stay
+    /// editable, no matter which row the cursor is actually on.
+    #[test]
+    fn sound_unavailable_rows_never_show_edit_indicator() {
+        let mut app = App::new();
+        app.sound = None;
+        for cursor in [ROW_SOUND, ROW_VOLUME] {
+            app.settings_state.cursor = cursor;
+            let lines = render_lines(&app);
+            assert!(
+                !lines.iter().any(|l| l.contains("< ") && l.contains('>')),
+                "row {cursor} (sound/volume) rendered as editable with no sound device: {lines:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unrelated_rows_stay_editable_when_sound_is_unavailable() {
+        let mut app = App::new();
+        app.sound = None;
+        for cursor in [ROW_HISTORY_EXPIRY, ROW_DIFFICULTY] {
+            app.settings_state.cursor = cursor;
+            let lines = render_lines(&app);
+            assert!(
+                lines.iter().any(|l| l.contains("< ") && l.contains('>')),
+                "row {cursor} should stay editable when sound is unavailable: {lines:?}"
+            );
+        }
+    }
 }

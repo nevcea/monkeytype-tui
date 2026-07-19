@@ -1,3 +1,5 @@
+//! Renders the History overlay: a scrollable list of past results.
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout},

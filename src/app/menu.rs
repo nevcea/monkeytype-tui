@@ -1,3 +1,6 @@
+//! Key handling for the Menu screen: mode/option selection, the language and
+//! theme picker overlays, and the custom time/word-count input slot.
+
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{
@@ -11,6 +14,47 @@ const CUSTOM_INPUT_MAX_LEN: usize = 5;
 /// Clamps for custom time (seconds) and word-count input.
 const CUSTOM_TIME_MAX: u64 = 3600;
 const CUSTOM_WORDS_MAX: usize = 5000;
+
+/// Move a picker's `cursor` by one (up if `!down`, down if `down`) within
+/// `[0, len)`, keeping it inside the `visible`-row scroll window. Returns
+/// whether the cursor actually moved, so callers can reset per-item state
+/// (e.g. the language picker's `size_idx`) only when it did.
+fn step_picker_cursor(
+    cursor: &mut usize,
+    scroll: &mut usize,
+    len: usize,
+    visible: usize,
+    down: bool,
+) -> bool {
+    if down {
+        if *cursor + 1 >= len {
+            return false;
+        }
+        *cursor += 1;
+        if *cursor >= *scroll + visible {
+            *scroll = *cursor + 1 - visible;
+        }
+    } else {
+        if *cursor == 0 {
+            return false;
+        }
+        *cursor -= 1;
+        if *cursor < *scroll {
+            *scroll = *cursor;
+        }
+    }
+    true
+}
+
+/// Step an option index forward (clamped to the custom slot at `len`) or
+/// backward (saturating at 0).
+fn step_option_idx(idx: usize, len: usize, forward: bool) -> usize {
+    if forward {
+        (idx + 1).min(len)
+    } else {
+        idx.saturating_sub(1)
+    }
+}
 
 impl App {
     pub(super) fn handle_menu(&mut self, key: KeyEvent) {
@@ -43,21 +87,23 @@ impl App {
         };
         match key.code {
             KeyCode::Up => {
-                if picker.cursor > 0 {
-                    picker.cursor -= 1;
-                    if picker.cursor < picker.scroll {
-                        picker.scroll = picker.cursor;
-                    }
-                }
+                step_picker_cursor(
+                    &mut picker.cursor,
+                    &mut picker.scroll,
+                    flen,
+                    THEME_PICKER_VISIBLE,
+                    false,
+                );
                 apply_preview(self);
             }
             KeyCode::Down => {
-                if picker.cursor + 1 < flen {
-                    picker.cursor += 1;
-                    if picker.cursor >= picker.scroll + THEME_PICKER_VISIBLE {
-                        picker.scroll = picker.cursor + 1 - THEME_PICKER_VISIBLE;
-                    }
-                }
+                step_picker_cursor(
+                    &mut picker.cursor,
+                    &mut picker.scroll,
+                    flen,
+                    THEME_PICKER_VISIBLE,
+                    true,
+                );
                 apply_preview(self);
             }
             KeyCode::Enter => {
@@ -96,21 +142,25 @@ impl App {
         let flen = filtered.len();
         match key.code {
             KeyCode::Up => {
-                if picker.cursor > 0 {
-                    picker.cursor -= 1;
+                if step_picker_cursor(
+                    &mut picker.cursor,
+                    &mut picker.scroll,
+                    flen,
+                    LANG_PICKER_VISIBLE,
+                    false,
+                ) {
                     picker.size_idx = 0;
-                    if picker.cursor < picker.scroll {
-                        picker.scroll = picker.cursor;
-                    }
                 }
             }
             KeyCode::Down => {
-                if picker.cursor + 1 < flen {
-                    picker.cursor += 1;
+                if step_picker_cursor(
+                    &mut picker.cursor,
+                    &mut picker.scroll,
+                    flen,
+                    LANG_PICKER_VISIBLE,
+                    true,
+                ) {
                     picker.size_idx = 0;
-                    if picker.cursor >= picker.scroll + LANG_PICKER_VISIBLE {
-                        picker.scroll = picker.cursor + 1 - LANG_PICKER_VISIBLE;
-                    }
                 }
             }
             KeyCode::Left => {
@@ -271,29 +321,21 @@ impl App {
     fn step_menu(&mut self, forward: bool) {
         match self.menu.mode {
             Mode::Time(_) => {
-                let idx = &mut self.menu.time_idx;
-                if forward && *idx < TIME_OPTIONS.len() {
-                    *idx += 1;
-                } else if !forward {
-                    *idx = idx.saturating_sub(1);
-                }
+                self.menu.time_idx =
+                    step_option_idx(self.menu.time_idx, TIME_OPTIONS.len(), forward);
                 self.menu.mode = Mode::Time(
                     TIME_OPTIONS
-                        .get(*idx)
+                        .get(self.menu.time_idx)
                         .copied()
                         .unwrap_or(self.menu.custom_time_val),
                 );
             }
             Mode::Words(_) => {
-                let idx = &mut self.menu.word_idx;
-                if forward && *idx < WORD_OPTIONS.len() {
-                    *idx += 1;
-                } else if !forward {
-                    *idx = idx.saturating_sub(1);
-                }
+                self.menu.word_idx =
+                    step_option_idx(self.menu.word_idx, WORD_OPTIONS.len(), forward);
                 self.menu.mode = Mode::Words(
                     WORD_OPTIONS
-                        .get(*idx)
+                        .get(self.menu.word_idx)
                         .copied()
                         .unwrap_or(self.menu.custom_words_val),
                 );

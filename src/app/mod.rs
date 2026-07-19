@@ -1,3 +1,7 @@
+//! `App`: all UI state and input handling. `on_key`/`tick` are the only entry
+//! points `main.rs` calls each frame; screen-specific key routing lives in
+//! the `app::{help,history,menu,result,settings,test}` submodules.
+
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::time::Instant;
 use unicode_width::UnicodeWidthChar;
@@ -33,6 +37,33 @@ pub const TIME_OPTIONS: &[u64] = &[15, 30, 60, 120];
 pub const WORD_OPTIONS: &[usize] = &[10, 25, 50, 100];
 pub const LANG_PICKER_VISIBLE: usize = 12;
 pub const THEME_PICKER_VISIBLE: usize = 12;
+
+enum DialogResult {
+    /// Dialog is still open (a toggle key, or a key with no effect).
+    Open,
+    /// Closed via Enter (with the chosen yes/no) or Esc (always `false`).
+    Confirmed(bool),
+}
+
+/// Shared Left/Right/Tab/Enter/Esc handling for a yes/no confirmation dialog.
+fn handle_confirm_dialog(open: &mut bool, yes: &mut bool, key: KeyEvent) -> DialogResult {
+    match key.code {
+        KeyCode::Left | KeyCode::Right | KeyCode::Tab => *yes = !*yes,
+        KeyCode::Enter => {
+            let chosen = *yes;
+            *open = false;
+            *yes = false;
+            return DialogResult::Confirmed(chosen);
+        }
+        KeyCode::Esc => {
+            *open = false;
+            *yes = false;
+            return DialogResult::Confirmed(false);
+        }
+        _ => {}
+    }
+    DialogResult::Open
+}
 
 const DEFAULT_VOLUME_PCT: u8 = 25;
 
@@ -273,44 +304,22 @@ impl App {
             return;
         }
         if self.dialog.quit_confirm {
-            match key.code {
-                KeyCode::Left | KeyCode::Right | KeyCode::Tab => {
-                    self.dialog.quit_yes = !self.dialog.quit_yes
-                }
-                KeyCode::Enter => {
-                    if self.dialog.quit_yes {
-                        self.should_quit = true;
-                    } else {
-                        self.dialog.quit_confirm = false;
-                        self.dialog.quit_yes = false;
-                    }
-                }
-                KeyCode::Esc => {
-                    self.dialog.quit_confirm = false;
-                    self.dialog.quit_yes = false;
-                }
-                _ => {}
+            if let DialogResult::Confirmed(true) = handle_confirm_dialog(
+                &mut self.dialog.quit_confirm,
+                &mut self.dialog.quit_yes,
+                key,
+            ) {
+                self.should_quit = true;
             }
             return;
         }
         if self.dialog.test_confirm {
-            match key.code {
-                KeyCode::Left | KeyCode::Right | KeyCode::Tab => {
-                    self.dialog.test_confirm_yes = !self.dialog.test_confirm_yes
-                }
-                KeyCode::Enter => {
-                    let go = self.dialog.test_confirm_yes;
-                    self.dialog.test_confirm = false;
-                    self.dialog.test_confirm_yes = false;
-                    if go {
-                        self.screen = Screen::Menu;
-                    }
-                }
-                KeyCode::Esc => {
-                    self.dialog.test_confirm = false;
-                    self.dialog.test_confirm_yes = false;
-                }
-                _ => {}
+            if let DialogResult::Confirmed(true) = handle_confirm_dialog(
+                &mut self.dialog.test_confirm,
+                &mut self.dialog.test_confirm_yes,
+                key,
+            ) {
+                self.screen = Screen::Menu;
             }
             return;
         }
@@ -427,10 +436,14 @@ impl App {
             return;
         }
         let lines = word_lines(&self.game.words, self.scroll_word, width);
-        if let Some(line0_last) = lines.first().and_then(|l| l.last()).copied()
-            && cursor_word > line0_last
-            && let Some(line1_start) = lines.get(1).and_then(|l| l.first()).copied()
-        {
+        let Some(line0_last) = lines.first().and_then(|l| l.last()).copied() else {
+            return;
+        };
+        if cursor_word <= line0_last {
+            return;
+        }
+        // Cursor has moved past the first visible line: scroll to the second.
+        if let Some(line1_start) = lines.get(1).and_then(|l| l.first()).copied() {
             self.scroll_word = line1_start;
         }
     }
@@ -551,5 +564,80 @@ mod input_flow_tests {
         app.on_key(key(KeyCode::Enter));
         assert_eq!(app.screen, Screen::Menu);
         assert!(!app.dialog.test_confirm);
+    }
+
+    /// Opens the custom-time input slot (the entry past the last preset in
+    /// `TIME_OPTIONS`) the same way `Enter`/`Tab` would in the real menu.
+    fn open_custom_time_input(app: &mut App) {
+        app.menu.time_idx = TIME_OPTIONS.len();
+        app.menu.mode = Mode::Time(app.menu.custom_time_val);
+        app.on_key(key(KeyCode::Enter));
+        assert_eq!(app.menu.custom_input.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn custom_input_ignores_non_digits_and_caps_at_max_len() {
+        let mut app = App::new();
+        open_custom_time_input(&mut app);
+        for c in "1a2b3c4d5e6f".chars() {
+            app.on_key(key(KeyCode::Char(c)));
+        }
+        // CUSTOM_INPUT_MAX_LEN is 5: digits 1-5 are kept, '6' is dropped, letters ignored.
+        assert_eq!(app.menu.custom_input.as_deref(), Some("12345"));
+    }
+
+    #[test]
+    fn custom_input_backspace_removes_last_char() {
+        let mut app = App::new();
+        open_custom_time_input(&mut app);
+        app.on_key(key(KeyCode::Char('9')));
+        app.on_key(key(KeyCode::Char('0')));
+        app.on_key(key(KeyCode::Backspace));
+        assert_eq!(app.menu.custom_input.as_deref(), Some("9"));
+    }
+
+    #[test]
+    fn custom_time_input_clamps_to_max_on_enter() {
+        let mut app = App::new();
+        open_custom_time_input(&mut app);
+        for c in "99999".chars() {
+            app.on_key(key(KeyCode::Char(c)));
+        }
+        app.on_key(key(KeyCode::Enter));
+        assert_eq!(app.menu.mode, Mode::Time(3600));
+        assert_eq!(app.screen, Screen::Test);
+    }
+
+    #[test]
+    fn custom_words_input_clamps_to_max_on_enter() {
+        let mut app = App::new();
+        app.menu.word_idx = WORD_OPTIONS.len();
+        app.menu.mode = Mode::Words(app.menu.custom_words_val);
+        app.on_key(key(KeyCode::Enter));
+        for c in "99999".chars() {
+            app.on_key(key(KeyCode::Char(c)));
+        }
+        app.on_key(key(KeyCode::Enter));
+        assert_eq!(app.menu.mode, Mode::Words(5000));
+        assert_eq!(app.screen, Screen::Test);
+    }
+
+    #[test]
+    fn custom_input_empty_enter_does_not_start_test() {
+        let mut app = App::new();
+        open_custom_time_input(&mut app);
+        app.on_key(key(KeyCode::Enter));
+        assert_eq!(app.screen, Screen::Menu);
+        assert_eq!(app.menu.custom_input.as_deref(), Some(""));
+    }
+
+    #[test]
+    fn custom_input_esc_cancels_without_starting_test() {
+        let mut app = App::new();
+        open_custom_time_input(&mut app);
+        app.on_key(key(KeyCode::Char('5')));
+        app.on_key(key(KeyCode::Esc));
+        assert!(app.menu.custom_input.is_none());
+        assert_eq!(app.screen, Screen::Menu);
     }
 }

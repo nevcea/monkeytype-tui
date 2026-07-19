@@ -1,3 +1,7 @@
+//! Color palette: built-in `THEMES` plus user themes loaded once from
+//! `data_dir()/themes/*.json`, selected via `Settings::theme_name` and read
+//! per-frame through the `th_*()` accessors used by every `ui/*` screen.
+
 use ratatui::style::Color;
 use serde::Deserialize;
 use std::sync::LazyLock;

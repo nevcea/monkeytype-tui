@@ -1,3 +1,6 @@
+//! Renders the Test screen: progress gauge, wrapped word lines with
+//! per-character coloring, and the live WPM/accuracy readout.
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},
@@ -290,5 +293,52 @@ fn char_style(state: CharState, dim_pending: bool, cursor_shape: Option<CursorSh
             let color = if dim_pending { th_dim() } else { th_pending() };
             Style::default().fg(color)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::Settings;
+
+    fn game() -> GameState {
+        GameState::new(Mode::Words(3), Settings::default(), vec![])
+    }
+
+    #[test]
+    fn correct_char_renders_with_correct_color_and_bold() {
+        let mut g = game();
+        let ch = g.chars[0].expected;
+        g.type_char(ch);
+        let line = build_word_line(&g, &[0], true, None);
+        let span = &line.spans[0];
+        assert_eq!(span.content, ch.to_string());
+        assert_eq!(span.style.fg, Some(th_correct()));
+        assert!(span.style.add_modifier.contains(Modifier::BOLD));
+    }
+
+    #[test]
+    fn wrong_char_renders_with_wrong_color_and_underline() {
+        let mut g = game();
+        let expected = g.chars[0].expected;
+        let wrong = if expected == 'a' { 'z' } else { 'a' };
+        g.type_char(wrong);
+        let line = build_word_line(&g, &[0], true, None);
+        let span = &line.spans[0];
+        assert_eq!(span.content, wrong.to_string());
+        assert_eq!(span.style.fg, Some(th_wrong()));
+        assert!(span.style.add_modifier.contains(Modifier::UNDERLINED));
+    }
+
+    /// A letter mistyped as a space renders as a middle dot rather than a
+    /// blank, so the error stays visible instead of looking like an unfilled
+    /// pending char.
+    #[test]
+    fn letter_mistyped_as_space_renders_as_middle_dot() {
+        let mut g = game();
+        assert!(g.chars[0].expected != ' ');
+        g.type_char(' ');
+        let line = build_word_line(&g, &[0], true, None);
+        assert_eq!(line.spans[0].content, "\u{b7}");
     }
 }

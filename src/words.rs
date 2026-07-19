@@ -1,3 +1,7 @@
+//! Word/quote data: the `LANGUAGES` table of word lists and quotes embedded
+//! at compile time via `include_str!`, plus a cache so switching modes never
+//! re-parses the same JSON twice.
+
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};

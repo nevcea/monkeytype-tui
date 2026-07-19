@@ -1,3 +1,5 @@
+//! Key handling for the Help overlay (any key returns to the menu).
+
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{App, Screen};

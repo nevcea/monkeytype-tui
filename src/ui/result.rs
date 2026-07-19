@@ -1,3 +1,5 @@
+//! Renders the Result screen: WPM/accuracy/consistency summary after a test.
+
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Layout, Rect},

@@ -1,3 +1,6 @@
+//! Key handling for the Settings screen: row navigation, value cycling,
+//! volume text entry, and the discard-changes confirmation on exit.
+
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{App, DEFAULT_VOLUME_PCT, Screen};
@@ -116,74 +119,89 @@ impl App {
     }
 
     pub(super) fn handle_settings(&mut self, key: KeyEvent) {
-        let max_cursor = self.settings_max_cursor();
-
         if self.handle_settings_volume_input(key) {
             return;
         }
+        if self.settings_state.pending_exit {
+            self.handle_settings_pending_exit(key);
+            return;
+        }
+        self.handle_settings_row_input(key);
+    }
 
+    /// While the "discard changes?" prompt is up, only `y` has an effect
+    /// (discard and leave); every other key dismisses the prompt. Nothing on
+    /// this screen can change `self.settings` while the prompt is showing, so
+    /// there's no "still unchanged, exit quietly" case to handle here.
+    fn handle_settings_pending_exit(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('y') if self.settings_state.pending_exit => {
-                if let Some((snap, snap_pack, snap_vol)) = self.settings_state.snapshot.take() {
-                    self.settings = snap;
-                    if let Some(s) = &mut self.sound {
-                        s.pack = snap_pack;
-                        s.set_volume_pct(snap_vol);
-                    }
-                }
-                self.settings_state.volume_input = None;
-                self.settings_state.pending_exit = false;
-                self.screen = Screen::Menu;
-                self.history = history::load_history(self.settings.history_expiry);
-                self.history_scroll = self
-                    .history_scroll
-                    .min(self.history.len().saturating_sub(1));
-                self.persist();
+            KeyCode::Char('y') => self.discard_settings_and_exit(),
+            KeyCode::Enter => {}
+            _ => self.settings_state.pending_exit = false,
+        }
+    }
+
+    fn discard_settings_and_exit(&mut self) {
+        if let Some((snap, snap_pack, snap_vol)) = self.settings_state.snapshot.take() {
+            self.settings = snap;
+            if let Some(s) = &mut self.sound {
+                s.pack = snap_pack;
+                s.set_volume_pct(snap_vol);
             }
-            KeyCode::Char('n') if self.settings_state.pending_exit => {
-                self.settings_state.pending_exit = false;
-            }
+        }
+        self.settings_state.volume_input = None;
+        self.settings_state.pending_exit = false;
+        self.screen = Screen::Menu;
+        self.reload_history();
+        self.persist();
+    }
+
+    fn reload_history(&mut self) {
+        self.history = history::load_history(self.settings.history_expiry);
+        self.history_scroll = self
+            .history_scroll
+            .min(self.history.len().saturating_sub(1));
+    }
+
+    /// Whether the current settings + sound state match the snapshot taken
+    /// when the settings screen was opened (or last saved).
+    fn settings_unchanged(&self) -> bool {
+        let sound_pack = self
+            .sound
+            .as_ref()
+            .map(|s| s.pack)
+            .unwrap_or(SoundPack::Off);
+        let sound_vol = self
+            .sound
+            .as_ref()
+            .map(|s| s.volume_pct)
+            .unwrap_or(DEFAULT_VOLUME_PCT);
+        self.settings_state
+            .snapshot
+            .as_ref()
+            .is_some_and(|(snap, pack, vol)| {
+                self.settings == *snap && sound_pack == *pack && sound_vol == *vol
+            })
+    }
+
+    fn handle_settings_row_input(&mut self, key: KeyEvent) {
+        match key.code {
             KeyCode::Enter => {
-                if !self.settings_state.pending_exit {
-                    self.apply_volume_input();
-                    // update snapshot to current state so * indicators reset
-                    self.settings_state.snapshot = Some(self.make_settings_snapshot());
-                    self.history = history::load_history(self.settings.history_expiry);
-                    self.history_scroll = self
-                        .history_scroll
-                        .min(self.history.len().saturating_sub(1));
-                    self.persist();
-                }
+                self.apply_volume_input();
+                // update snapshot to current state so * indicators reset
+                self.settings_state.snapshot = Some(self.make_settings_snapshot());
+                self.reload_history();
+                self.persist();
             }
             KeyCode::Esc => {
                 self.apply_volume_input();
-                let sound_pack = self
-                    .sound
-                    .as_ref()
-                    .map(|s| s.pack)
-                    .unwrap_or(SoundPack::Off);
-                let sound_vol = self
-                    .sound
-                    .as_ref()
-                    .map(|s| s.volume_pct)
-                    .unwrap_or(DEFAULT_VOLUME_PCT);
-                let unchanged =
-                    self.settings_state
-                        .snapshot
-                        .as_ref()
-                        .is_some_and(|(snap, pack, vol)| {
-                            self.settings == *snap && sound_pack == *pack && sound_vol == *vol
-                        });
-                if unchanged {
+                if self.settings_unchanged() {
                     self.settings_state.snapshot = None;
                     self.screen = Screen::Menu;
                     self.persist();
                 } else {
-                    self.settings_state.pending_exit = !self.settings_state.pending_exit;
+                    self.settings_state.pending_exit = true;
                 }
-            }
-            _ if self.settings_state.pending_exit => {
-                self.settings_state.pending_exit = false;
             }
             KeyCode::Up => {
                 self.apply_volume_input();
@@ -191,7 +209,7 @@ impl App {
             }
             KeyCode::Down => {
                 self.apply_volume_input();
-                if self.settings_state.cursor < max_cursor {
+                if self.settings_state.cursor < self.settings_max_cursor() {
                     self.settings_state.cursor += 1;
                 }
             }
