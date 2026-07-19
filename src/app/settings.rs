@@ -7,17 +7,47 @@ use super::{App, DEFAULT_VOLUME_PCT, Screen};
 use crate::history;
 use crate::sound::SoundPack;
 
-/// Settings-screen rows (cursor shape, sound, volume, history expiry,
-/// difficulty, theme).
-const SETTINGS_ROWS: usize = 6;
-const SETTINGS_ROW_VOLUME: usize = 2;
 const VOLUME_STEP: u8 = 5;
 const VOLUME_MIN: u8 = 1;
 const VOLUME_MAX: u8 = 100;
 
+/// The Settings screen's rows, in display order. Single source of truth for
+/// both the key handling here and the rendering in `ui::settings` — those two
+/// previously carried independent copies of the order as bare indices, so
+/// adding or moving a row silently desynced them.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum SettingsRow {
+    CursorShape,
+    Sound,
+    Volume,
+    HistoryExpiry,
+    Difficulty,
+    Theme,
+}
+
+impl SettingsRow {
+    pub const ORDER: &'static [SettingsRow] = &[
+        SettingsRow::CursorShape,
+        SettingsRow::Sound,
+        SettingsRow::Volume,
+        SettingsRow::HistoryExpiry,
+        SettingsRow::Difficulty,
+        SettingsRow::Theme,
+    ];
+
+    pub fn from_index(i: usize) -> Option<Self> {
+        Self::ORDER.get(i).copied()
+    }
+
+    /// Rows that can't be edited without an audio device.
+    pub fn needs_audio(self) -> bool {
+        matches!(self, Self::Sound | Self::Volume)
+    }
+}
+
 impl App {
     pub fn settings_max_cursor(&self) -> usize {
-        SETTINGS_ROWS - 1
+        SettingsRow::ORDER.len() - 1
     }
 
     fn apply_volume_input(&mut self) {
@@ -32,7 +62,8 @@ impl App {
     /// Handle digit / backspace editing of the volume field. Returns `true` when
     /// the key was consumed as text input.
     fn handle_settings_volume_input(&mut self, key: KeyEvent) -> bool {
-        let on_volume = self.settings_state.cursor == SETTINGS_ROW_VOLUME;
+        let on_volume =
+            SettingsRow::from_index(self.settings_state.cursor) == Some(SettingsRow::Volume);
         if !on_volume || self.settings_state.pending_exit || self.sound.is_none() {
             return false;
         }
@@ -63,20 +94,20 @@ impl App {
 
     /// Cycle the value on the current settings row (Left = reverse).
     fn adjust_setting_row(&mut self, rev: bool) {
-        match self.settings_state.cursor {
-            0 => {
+        match SettingsRow::from_index(self.settings_state.cursor) {
+            Some(SettingsRow::CursorShape) => {
                 self.settings.cursor_shape = if rev {
                     self.settings.cursor_shape.prev()
                 } else {
                     self.settings.cursor_shape.next()
                 }
             }
-            1 => {
+            Some(SettingsRow::Sound) => {
                 if let Some(s) = &mut self.sound {
                     s.pack = if rev { s.pack.prev() } else { s.pack.next() };
                 }
             }
-            SETTINGS_ROW_VOLUME => {
+            Some(SettingsRow::Volume) => {
                 if let Some(s) = &mut self.sound {
                     let new = if rev {
                         s.volume_pct.saturating_sub(VOLUME_STEP).max(VOLUME_MIN)
@@ -86,21 +117,21 @@ impl App {
                     s.set_volume_pct(new);
                 }
             }
-            3 => {
+            Some(SettingsRow::HistoryExpiry) => {
                 self.settings.history_expiry = if rev {
                     self.settings.history_expiry.prev()
                 } else {
                     self.settings.history_expiry.next()
                 };
             }
-            4 => {
+            Some(SettingsRow::Difficulty) => {
                 self.settings.difficulty = if rev {
                     self.settings.difficulty.prev()
                 } else {
                     self.settings.difficulty.next()
                 };
             }
-            5 => {
+            Some(SettingsRow::Theme) => {
                 let themes = crate::ui::all_themes();
                 let n = themes.len();
                 if n == 0 {

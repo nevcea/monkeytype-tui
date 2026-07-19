@@ -9,7 +9,7 @@ use ratatui::{
     widgets::Paragraph,
 };
 
-use crate::app::App;
+use crate::app::{App, SettingsRow};
 use crate::sound::SoundPack;
 
 use super::*;
@@ -25,30 +25,35 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         (Some(s), None) => format!("{}%", s.volume_pct),
         (None, _) => "-".to_string(),
     };
-    let rows: Vec<(&str, String, bool)> = vec![
-        (
-            "cursor shape",
-            app.settings.cursor_shape.label().into(),
-            true,
-        ),
-        ("sound", sound_label, sound_active),
-        ("volume (1-100)", volume_label, true),
-        (
-            "history expiry",
-            app.settings.history_expiry.label().into(),
-            app.settings.history_expiry != crate::history::HistoryExpiry::Off,
-        ),
-        (
-            "difficulty",
-            app.settings.difficulty.label().into(),
-            app.settings.difficulty != crate::game::Difficulty::Normal,
-        ),
-        (
-            "theme",
-            theme_by_name(&app.settings.theme_name).name.into(),
-            app.settings.theme_name != crate::game::DEFAULT_THEME,
-        ),
-    ];
+    // Rows follow `SettingsRow::ORDER` so this list and the key handling in
+    // `app::settings` can never drift out of order.
+    let rows: Vec<(&str, String, bool)> = SettingsRow::ORDER
+        .iter()
+        .map(|row| match row {
+            SettingsRow::CursorShape => (
+                "cursor shape",
+                app.settings.cursor_shape.label().to_string(),
+                true,
+            ),
+            SettingsRow::Sound => ("sound", sound_label.clone(), sound_active),
+            SettingsRow::Volume => ("volume (1-100)", volume_label.clone(), true),
+            SettingsRow::HistoryExpiry => (
+                "history expiry",
+                app.settings.history_expiry.label().to_string(),
+                app.settings.history_expiry != crate::history::HistoryExpiry::Off,
+            ),
+            SettingsRow::Difficulty => (
+                "difficulty",
+                app.settings.difficulty.label().to_string(),
+                app.settings.difficulty != crate::game::Difficulty::Normal,
+            ),
+            SettingsRow::Theme => (
+                "theme",
+                theme_by_name(&app.settings.theme_name).name.to_string(),
+                app.settings.theme_name != crate::game::DEFAULT_THEME,
+            ),
+        })
+        .collect();
 
     let height = (rows.len() + 5) as u16;
     let area = centered_rect(40, 0, f.area());
@@ -70,21 +75,25 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         return;
     };
 
-    let changed: [bool; 6] = if let Some((snap, snap_pack, snap_vol)) = &app.settings_state.snapshot
-    {
-        [
-            app.settings.cursor_shape != snap.cursor_shape,
-            app.sound.as_ref().is_some_and(|s| s.pack != *snap_pack),
-            app.sound
-                .as_ref()
-                .is_some_and(|s| s.volume_pct != *snap_vol),
-            app.settings.history_expiry != snap.history_expiry,
-            app.settings.difficulty != snap.difficulty,
-            app.settings.theme_name != snap.theme_name,
-        ]
-    } else {
-        [false; 6]
-    };
+    let changed: Vec<bool> = SettingsRow::ORDER
+        .iter()
+        .map(|row| {
+            let Some((snap, snap_pack, snap_vol)) = &app.settings_state.snapshot else {
+                return false;
+            };
+            match row {
+                SettingsRow::CursorShape => app.settings.cursor_shape != snap.cursor_shape,
+                SettingsRow::Sound => app.sound.as_ref().is_some_and(|s| s.pack != *snap_pack),
+                SettingsRow::Volume => app
+                    .sound
+                    .as_ref()
+                    .is_some_and(|s| s.volume_pct != *snap_vol),
+                SettingsRow::HistoryExpiry => app.settings.history_expiry != snap.history_expiry,
+                SettingsRow::Difficulty => app.settings.difficulty != snap.difficulty,
+                SettingsRow::Theme => app.settings.theme_name != snap.theme_name,
+            }
+        })
+        .collect();
     let title = if changed.iter().any(|&c| c) {
         "settings [*]"
     } else {
@@ -105,7 +114,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         .iter()
         .enumerate()
         .map(|(i, (label, val, active))| {
-            let unavailable = (i == 1 || i == 2) && app.sound.is_none();
+            let unavailable = SettingsRow::ORDER[i].needs_audio() && app.sound.is_none();
             let cursor = if i == app.settings_state.cursor && !unavailable {
                 Span::styled("> ", Style::default().fg(th_accent()))
             } else {
@@ -171,10 +180,43 @@ mod tests {
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    const ROW_SOUND: usize = 1;
-    const ROW_VOLUME: usize = 2;
-    const ROW_HISTORY_EXPIRY: usize = 3;
-    const ROW_DIFFICULTY: usize = 4;
+    fn row_index(row: SettingsRow) -> usize {
+        SettingsRow::ORDER.iter().position(|&r| r == row).unwrap()
+    }
+
+    /// `SettingsRow::ORDER` drives both this screen's rows and the key
+    /// handling in `app::settings`. If an entry is ever duplicated or dropped
+    /// from ORDER, `from_index` stops agreeing with position and the two
+    /// modules silently disagree about which row the cursor is on.
+    #[test]
+    fn row_order_and_from_index_agree() {
+        for (i, &row) in SettingsRow::ORDER.iter().enumerate() {
+            assert_eq!(SettingsRow::from_index(i), Some(row));
+            assert_eq!(row_index(row), i, "duplicate entry in ORDER for {row:?}");
+        }
+        assert_eq!(SettingsRow::from_index(SettingsRow::ORDER.len()), None);
+    }
+
+    /// Every row in ORDER must render a line, so the rendered list and the
+    /// cursor range the key handler allows stay the same length.
+    #[test]
+    fn every_row_renders_a_line() {
+        let app = App::new();
+        let lines = render_lines(&app);
+        for label in [
+            "cursor shape",
+            "sound",
+            "volume",
+            "history expiry",
+            "difficulty",
+            "theme",
+        ] {
+            assert!(
+                lines.iter().any(|l| l.contains(label)),
+                "row {label} missing from render: {lines:?}"
+            );
+        }
+    }
 
     fn render_lines(app: &App) -> Vec<String> {
         let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
@@ -197,7 +239,10 @@ mod tests {
     fn sound_unavailable_rows_never_show_edit_indicator() {
         let mut app = App::new();
         app.sound = None;
-        for cursor in [ROW_SOUND, ROW_VOLUME] {
+        for cursor in [
+            row_index(SettingsRow::Sound),
+            row_index(SettingsRow::Volume),
+        ] {
             app.settings_state.cursor = cursor;
             let lines = render_lines(&app);
             assert!(
@@ -211,7 +256,10 @@ mod tests {
     fn unrelated_rows_stay_editable_when_sound_is_unavailable() {
         let mut app = App::new();
         app.sound = None;
-        for cursor in [ROW_HISTORY_EXPIRY, ROW_DIFFICULTY] {
+        for cursor in [
+            row_index(SettingsRow::HistoryExpiry),
+            row_index(SettingsRow::Difficulty),
+        ] {
             app.settings_state.cursor = cursor;
             let lines = render_lines(&app);
             assert!(

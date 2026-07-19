@@ -20,6 +20,8 @@ mod result;
 mod settings;
 mod test;
 
+pub use settings::SettingsRow;
+
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Screen {
     Menu,
