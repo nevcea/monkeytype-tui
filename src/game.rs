@@ -14,6 +14,8 @@ use crate::words::load_words;
 const CHARS_PER_WORD: f64 = 5.0;
 /// Floor for a sampling interval to avoid divide-by-near-zero WPM spikes.
 const MIN_SAMPLE_INTERVAL: f64 = 0.001;
+/// Shortest interval that counts as a real sampling window; see [`GameState::push_sample`].
+const MIN_REAL_INTERVAL: f64 = 0.5;
 /// Keystroke gaps longer than this (seconds) are counted as idle/AFK.
 const AFK_THRESHOLD_SECS: f64 = 2.0;
 /// Accuracy below this percentage fails the test.
@@ -427,6 +429,14 @@ impl GameState {
         // consistency; per-interval samples match monkeytype's per-second bursts.
         let elapsed = self.elapsed().as_secs_f64();
         let interval = (elapsed - self.last_sample_elapsed).max(MIN_SAMPLE_INTERVAL);
+        // ponytail: the end-of-test sample often covers a tiny fraction of a
+        // second, turning a couple of keystrokes into a 250+ WPM spike that
+        // skews both the result chart's y-axis and consistency. Drop the
+        // fragment (bookkeeping included, so its delta rolls into the next
+        // sample) rather than special-casing every push_sample call site.
+        if interval < MIN_REAL_INTERVAL && !self.wpm_samples.is_empty() {
+            return;
+        }
         let correct = self.correct_chars();
         let d_correct = correct.saturating_sub(self.last_sample_correct);
         let d_total = self.cursor.saturating_sub(self.last_sample_cursor);
@@ -703,6 +713,21 @@ mod tests {
     #[test]
     fn accuracy_full_when_no_keystrokes() {
         assert_eq!(game().accuracy(), 100.0);
+    }
+
+    #[test]
+    fn push_sample_drops_trailing_fragment() {
+        let mut g = game();
+        g.started_at = Some(Instant::now());
+        g.push_sample();
+        assert_eq!(g.wpm_samples.len(), 1, "first sample always lands");
+        // Back-to-back call: a sub-second fragment, as produced at test end.
+        g.push_sample();
+        assert_eq!(g.wpm_samples.len(), 1, "fragment must be dropped");
+        // A full sampling window still lands.
+        g.last_sample_elapsed -= MIN_REAL_INTERVAL;
+        g.push_sample();
+        assert_eq!(g.wpm_samples.len(), 2);
     }
 
     #[test]

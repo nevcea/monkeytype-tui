@@ -246,32 +246,49 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
     };
 
     let n = samples.len();
-    let max_wpm = samples
-        .iter()
-        .cloned()
-        .chain(app.game.raw_wpm_samples.iter().cloned())
-        .fold(0.0_f64, f64::max)
-        .max(1.0);
-    let y_max = (max_wpm * 1.25).ceil();
-
+    // Series are 1-indexed on x so the axis labels below land on real points.
     let burst_data: Vec<(f64, f64)> = samples
         .iter()
         .enumerate()
-        .map(|(i, &w)| (i as f64, w))
+        .map(|(i, &w)| (i as f64 + 1.0, w))
         .collect();
     let raw_data: Vec<(f64, f64)> = app
         .game
         .raw_wpm_samples
         .iter()
         .enumerate()
-        .map(|(i, &w)| (i as f64, w))
+        .map(|(i, &w)| (i as f64 + 1.0, w))
         .collect();
 
+    // Smoothed burst: a 3-wide sliding mean, x-shifted to centre each window.
     let scale_data: Vec<(f64, f64)> = samples
         .windows(3)
         .enumerate()
-        .map(|(i, w)| (i as f64 + 1.0, w.iter().sum::<f64>() / w.len() as f64))
+        .map(|(i, w)| (i as f64 + 2.0, w.iter().sum::<f64>() / w.len() as f64))
         .collect();
+    // Short tests have no window to smooth over, so plot the raw bursts instead.
+    let wpm_data = if scale_data.len() >= 2 {
+        &scale_data
+    } else {
+        &burst_data
+    };
+
+    // Round the axis up to a whole number of ticks so all five labels are
+    // integral (0 / 25 / 50 / 75 / 100) instead of arbitrary fractions.
+    let peak = wpm_data
+        .iter()
+        .chain(raw_data.iter())
+        .map(|&(_, y)| y)
+        .fold(0.0_f64, f64::max)
+        .max(1.0);
+    let step = if peak > 200.0 {
+        50.0
+    } else if peak > 80.0 {
+        25.0
+    } else {
+        10.0
+    };
+    let y_max = ((peak * 1.1) / (step * 4.0)).ceil() * step * 4.0;
 
     let err_y = y_max * 0.06;
     let err_data: Vec<(f64, f64)> = app
@@ -280,10 +297,10 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
         .iter()
         .enumerate()
         .filter(|&(_, &d)| d > 0)
-        .map(|(i, _)| (i as f64, err_y))
+        .map(|(i, _)| (i as f64 + 1.0, err_y))
         .collect();
 
-    let x_max = (n - 1) as f64;
+    let x_max = n as f64;
     let y_labels: Vec<Line> = (0..=4)
         .map(|i| {
             Line::from(Span::styled(
@@ -298,7 +315,7 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
             if n <= 2 {
                 String::new()
             } else {
-                format!("{}", n / 2)
+                format!("{}", n.div_ceil(2))
             },
             Style::default().fg(th_dim()),
         )),
@@ -311,23 +328,19 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
         Dataset::default()
             .marker(symbols::Marker::Braille)
             .graph_type(GraphType::Line)
-            .style(Style::default().fg(th_pending()))
-            .data(&burst_data),
+            .style(Style::default().fg(th_accent()))
+            .data(wpm_data),
         Dataset::default()
             .marker(symbols::Marker::Dot)
             .graph_type(GraphType::Line)
             .style(Style::default().fg(th_sub()))
             .data(&raw_data),
     ];
-    if scale_data.len() >= 2 {
-        datasets.push(
-            Dataset::default()
-                .marker(symbols::Marker::Block)
-                .graph_type(GraphType::Line)
-                .style(Style::default().fg(th_accent()))
-                .data(&scale_data),
-        );
-    }
+    let mut legend = vec![
+        Span::styled("─ wpm", Style::default().fg(th_accent())),
+        Span::raw("  "),
+        Span::styled("⋯ raw", Style::default().fg(th_sub())),
+    ];
     if !err_data.is_empty() {
         datasets.push(
             Dataset::default()
@@ -336,12 +349,14 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
                 .style(Style::default().fg(th_wrong()))
                 .data(&err_data),
         );
+        legend.push(Span::raw("  "));
+        legend.push(Span::styled("• errors", Style::default().fg(th_wrong())));
     }
 
     let chart = Chart::new(datasets)
         .x_axis(
             Axis::default()
-                .bounds([0.0, x_max])
+                .bounds([1.0, x_max])
                 .labels(x_labels)
                 .style(Style::default().fg(th_dim())),
         )
@@ -355,13 +370,7 @@ fn draw_chart(f: &mut Frame, area: Rect, app: &App) {
     f.render_widget(chart, chart_body_a);
 
     f.render_widget(
-        Paragraph::new(Line::from(vec![
-            Span::styled("─ burst  ", Style::default().fg(th_pending())),
-            Span::styled("⋯ raw  ", Style::default().fg(th_sub())),
-            Span::styled("▬ scale  ", Style::default().fg(th_accent())),
-            Span::styled("• errors", Style::default().fg(th_wrong())),
-        ]))
-        .alignment(Alignment::Center),
+        Paragraph::new(Line::from(legend)).alignment(Alignment::Center),
         legend_a,
     );
 }
