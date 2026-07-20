@@ -52,13 +52,13 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
         .map_or("unknown", |l| l.name);
 
     let [lwpm_a, lacc_a, _, ltype_a, _, lraw_a, src_a] = Layout::vertical([
-        Constraint::Length(2), // wpm
-        Constraint::Length(2), // acc
+        Constraint::Length(2),
+        Constraint::Length(2),
         Constraint::Length(1), // gap
-        Constraint::Length(3), // test type
+        Constraint::Length(3),
         Constraint::Length(1), // gap
-        Constraint::Length(2), // raw
-        Constraint::Min(1),    // quote source (or spacer)
+        Constraint::Length(2),
+        Constraint::Min(1),
     ])
     .split(area)[..] else {
         return;
