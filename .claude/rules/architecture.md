@@ -37,4 +37,4 @@ paths:
 
 **WPM formula:** correct chars ÷ 5 ÷ elapsed minutes (standard 5-chars-per-word). `raw_wpm` uses total chars typed.
 
-**Adding a language:** Add word JSON to `static/languages/` → register a `lang!` entry in `words::LANGUAGES`. For quotes: add JSON to `static/quotes/` → pass its path as the `lang!` entry's optional third argument. `load_quotes_for` resolves quotes from `LangDef.quotes`, so no code branch is needed.
+**Adding a language:** `lang!` derives every `include_str!` path from the name, so files must follow the convention: word lists at `static/languages/<lang>.json` (the implicit `default` size) and `static/languages/<lang>_<size>.json`, quotes at `static/quotes/<lang>.json`. Add the JSON, then register one line in `words::LANGUAGES` listing only the non-default sizes — `lang!("english", ["1k", "5k", "10k"], quotes)`. Omit the trailing `quotes` marker when there is no quote file. `load_quotes_for` resolves quotes from `LangDef.quotes`, so no code branch is needed.
