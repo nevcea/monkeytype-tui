@@ -37,11 +37,6 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
             ),
             SettingsRow::Sound => ("sound", sound_label.clone(), sound_active),
             SettingsRow::Volume => ("volume (1-100)", volume_label.clone(), true),
-            SettingsRow::HistoryExpiry => (
-                "history expiry",
-                app.settings.history_expiry.label().to_string(),
-                app.settings.history_expiry != crate::history::HistoryExpiry::Off,
-            ),
             SettingsRow::Difficulty => (
                 "difficulty",
                 app.settings.difficulty.label().to_string(),
@@ -88,7 +83,6 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
                     .sound
                     .as_ref()
                     .is_some_and(|s| s.volume_pct != *snap_vol),
-                SettingsRow::HistoryExpiry => app.settings.history_expiry != snap.history_expiry,
                 SettingsRow::Difficulty => app.settings.difficulty != snap.difficulty,
                 SettingsRow::Theme => app.settings.theme_name != snap.theme_name,
             }
@@ -203,14 +197,7 @@ mod tests {
     fn every_row_renders_a_line() {
         let app = App::new();
         let lines = render_lines(&app);
-        for label in [
-            "cursor shape",
-            "sound",
-            "volume",
-            "history expiry",
-            "difficulty",
-            "theme",
-        ] {
+        for label in ["cursor shape", "sound", "volume", "difficulty", "theme"] {
             assert!(
                 lines.iter().any(|l| l.contains(label)),
                 "row {label} missing from render: {lines:?}"
@@ -233,7 +220,7 @@ mod tests {
 
     /// Regression test for 4ac7f07: when no audio device is available, the
     /// sound/volume rows must render as unavailable (no `< … >` edit
-    /// indicator) while unrelated rows (history expiry/difficulty) stay
+    /// indicator) while unrelated rows (cursor shape/difficulty) stay
     /// editable, no matter which row the cursor is actually on.
     #[test]
     fn sound_unavailable_rows_never_show_edit_indicator() {
@@ -257,7 +244,7 @@ mod tests {
         let mut app = App::new();
         app.sound = None;
         for cursor in [
-            row_index(SettingsRow::HistoryExpiry),
+            row_index(SettingsRow::CursorShape),
             row_index(SettingsRow::Difficulty),
         ] {
             app.settings_state.cursor = cursor;

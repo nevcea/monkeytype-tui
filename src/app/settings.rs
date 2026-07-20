@@ -20,7 +20,6 @@ pub enum SettingsRow {
     CursorShape,
     Sound,
     Volume,
-    HistoryExpiry,
     Difficulty,
     Theme,
 }
@@ -30,7 +29,6 @@ impl SettingsRow {
         SettingsRow::CursorShape,
         SettingsRow::Sound,
         SettingsRow::Volume,
-        SettingsRow::HistoryExpiry,
         SettingsRow::Difficulty,
         SettingsRow::Theme,
     ];
@@ -117,13 +115,6 @@ impl App {
                     s.set_volume_pct(new);
                 }
             }
-            Some(SettingsRow::HistoryExpiry) => {
-                self.settings.history_expiry = if rev {
-                    self.settings.history_expiry.prev()
-                } else {
-                    self.settings.history_expiry.next()
-                };
-            }
             Some(SettingsRow::Difficulty) => {
                 self.settings.difficulty = if rev {
                     self.settings.difficulty.prev()
@@ -191,7 +182,7 @@ impl App {
     }
 
     fn reload_history(&mut self) {
-        self.history = history::load_history(self.settings.history_expiry);
+        self.history = history::load_history();
         self.history_scroll = self
             .history_scroll
             .min(self.history.len().saturating_sub(1));

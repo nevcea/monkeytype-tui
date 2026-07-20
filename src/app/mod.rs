@@ -193,7 +193,6 @@ impl App {
             .map_or("english", |l| l.name);
         let quotes = load_quotes_for(lang);
         let game = GameState::new(cfg.mode, settings.clone(), quotes);
-        let history_expiry = settings.history_expiry;
         // Apply persisted sound preferences on top of the default player.
         let sound = SoundPlayer::new().map(|mut s| {
             s.pack = cfg.sound_pack;
@@ -218,7 +217,7 @@ impl App {
             scroll_word: 0,
             last_width: 80,
             last_height: 24,
-            history: crate::history::load_history(history_expiry),
+            history: crate::history::load_history(),
             history_scroll: 0,
             should_quit: false,
             settings_state: SettingsState {

@@ -7,7 +7,6 @@ use rand::{Rng, RngExt};
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 
-use crate::history::HistoryExpiry;
 use crate::words::QuoteEntry;
 use crate::words::load_words;
 
@@ -110,7 +109,6 @@ pub struct Settings {
     pub lang_idx: usize,
     pub size_idx: usize,
     pub cursor_shape: CursorShape,
-    pub history_expiry: HistoryExpiry,
     pub difficulty: Difficulty,
     pub quote_filter: QuoteFilter,
     pub theme_name: String,
@@ -124,7 +122,6 @@ impl Default for Settings {
             lang_idx: 0,
             size_idx: 0,
             cursor_shape: CursorShape::default(),
-            history_expiry: HistoryExpiry::default(),
             difficulty: Difficulty::default(),
             quote_filter: QuoteFilter::default(),
             theme_name: DEFAULT_THEME.to_string(),

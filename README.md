@@ -21,8 +21,8 @@
 - 🔍 **Language picker** with fuzzy search
 - 🎨 **Theme picker** with live preview — switch color themes and see the change
   instantly
-- ⚙️ **Settings screen** — cursor shape, sound & volume, history expiry,
-  difficulty, and theme (punctuation/numbers toggle from the menu instead)
+- ⚙️ **Settings screen** — cursor shape, sound & volume, difficulty, and theme
+  (punctuation/numbers toggle from the menu instead)
 
 ## Overview
 
@@ -106,7 +106,7 @@ to cancel.
 
 ### Settings screen
 
-Rows: cursor shape, sound, volume, history expiry, difficulty, theme.
+Rows: cursor shape, sound, volume, difficulty, theme.
 
 | Key | Action |
 | ----- | -------- |
