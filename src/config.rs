@@ -9,7 +9,7 @@ use crate::sound::SoundPack;
 /// Volume applied on first run, and the fallback used whenever live sound
 /// preferences can't be read (no audio device). Single source of truth for
 /// both `PersistedConfig::default` and `app`'s snapshot/persist fallbacks.
-pub const DEFAULT_VOLUME_PCT: u8 = 25;
+pub const DEFAULT_VOLUME_PCT: u8 = 12;
 
 /// Everything that should survive a restart: the settings block plus the menu
 /// selection and sound preferences (which live outside `Settings` at runtime).
