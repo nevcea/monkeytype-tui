@@ -8,32 +8,16 @@
 
 ## Highlights
 
-- 🖥️ **No browser, no Electron** — runs entirely in your terminal
-- ⏱️ **Three modes** — Time (15/30/60/120s, custom up to 3600s), Words
-  (10/25/50/100, custom up to 5000), Quote (with a length filter:
-  short/medium/long/thicc)
-- 🌍 **48 languages** with word lists embedded at compile time; quotes in 37 languages
-- 🎯 **Three difficulty levels** — Normal, Expert (any mistake fails the test),
-  Master (fails if the word you just finished had a mistake in it); any run also
-  fails below 75% accuracy
-- 📊 **WPM, raw WPM, and accuracy** on every result screen, with personal best tracking
-- 💾 **Persistent history** — last 50 results saved to `~/.local/share/monkeytype-tui/history.json`
-- 🔍 **Language picker** with fuzzy search
-- 🎨 **Theme picker** with live preview — switch color themes and see the change
-  instantly
-- ⚙️ **Settings screen** — cursor shape, sound & volume, difficulty, and theme
-  (punctuation/numbers toggle from the menu instead)
-
-## Overview
-
-`monkeytype-tui` brings the [monkeytype](https://monkeytype.com) typing
-experience to the terminal. If you live in a terminal and want to practice
-typing without leaving it, this is for you.
-
-It is built with [ratatui](https://github.com/ratatui-org/ratatui) and
-[crossterm](https://github.com/crossterm-rs/crossterm), with all word lists and
-quotes embedded at compile time — no network access, no runtime dependencies
-beyond the binary.
+- **No browser, no Electron** — runs entirely in your terminal, built with
+  [ratatui](https://github.com/ratatui-org/ratatui) and
+  [crossterm](https://github.com/crossterm-rs/crossterm)
+- **48 languages**, word lists and quotes embedded at compile time — no
+  network access, no runtime dependencies beyond the binary
+- **Strict difficulty modes** — Expert fails on any mistake, Master fails if
+  the word you just finished had one, on top of a 75% accuracy floor for
+  every run
+- **26 built-in themes** plus support for custom themes dropped into your
+  data directory
 
 ## Installation
 
@@ -53,94 +37,25 @@ cargo run --release
 ## Usage
 
 Launch the app, use `1`/`2`/`3` to pick Time / Words / Quote, `←`/`→` to change
-the option (or cycle the quote length filter in Quote mode), then press
-`Enter`/`Tab` to start typing.
-
-### Menu
+the option, then press `Enter`/`Tab` to start typing.
 
 | Key | Action |
 | ----- | -------- |
 | `1` / `2` / `3` | Switch to Time / Words / Quote mode |
-| `←` / `→` | Change mode option (or quote length filter in Quote mode) |
-| `Enter` / `Tab` | Start test (opens a custom prompt for "custom") |
-| `p` / `n` | Toggle punctuation / numbers |
-| `l` | Open language picker (fuzzy search, `←`/`→` change word-pool size) |
-| `t` / `T` | Open theme picker |
-| `h` | Open history |
+| `←` / `→` | Change mode option |
+| `Enter` / `Tab` | Start test |
+| `l` | Open language picker |
+| `t` | Open theme picker |
 | `s` | Open settings |
+| `h` | Open history |
 | `?` | Open help |
-| `q` / `Esc` | Quit (asks for confirmation) |
+| `q` / `Esc` / `Ctrl+C` | Quit |
 
-`Ctrl+C` quits immediately from any screen, not just the menu.
+While typing, `Backspace` deletes a character, `Ctrl+Backspace` deletes a
+word, and `Esc` returns to the menu.
 
-Confirmation dialogs (quitting from the menu, or abandoning a test in progress)
-are navigated with `←`/`→`/`Tab` to choose yes/no, `Enter` to confirm, and `Esc`
-to cancel.
-
-### Theme picker
-
-| Key | Action |
-| ----- | -------- |
-| `↑` / `↓` | Move selection (theme previews live as you move) |
-| Type | Filter themes by name |
-| `Backspace` | Edit search |
-| `Enter` | Keep selected theme |
-| `Esc` | Cancel and restore the original theme |
-
-### During a test
-
-| Key | Action |
-| ----- | -------- |
-| `Tab` | Restart with new words |
-| `Backspace` | Delete last character |
-| `Ctrl+Backspace` | Delete last word |
-| `Esc` | Back to menu (asks for confirmation once typing has started) |
-
-### Result screen
-
-| Key | Action |
-| ----- | -------- |
-| `r` | Repeat the same words |
-| `Enter` / `Tab` | New test with fresh words |
-| `Esc` | Back to menu |
-
-### Settings screen
-
-Rows: cursor shape, sound, volume, difficulty, theme.
-
-| Key | Action |
-| ----- | -------- |
-| `↑` / `↓` | Move between rows |
-| `←` / `→` | Change the selected row's value |
-| `0`-`9` / `Backspace` | Type an exact volume % (on the volume row) |
-| `Enter` | Save and return to menu |
-| `Esc` | Return to menu (asks `y`/`n` to discard unsaved changes) |
-
-### History screen
-
-| Key | Action |
-| ----- | -------- |
-| `↑` / `↓` | Scroll |
-| `Esc` / `q` | Back to menu |
-
-### Help screen
-
-| Key | Action |
-| ----- | -------- |
-| `Esc` / `q` / `?` | Back to menu |
-
-The help overlay documents controls contextually for each screen — check it
-in-app for the full reference.
-
-## Supported Languages
-
-Afrikaans, Albanian, Azerbaijani, Belarusian, Bosnian, Bulgarian, Catalan,
-Croatian, Czech, Danish, Dutch, English, Esperanto, Estonian, Filipino, Finnish,
-French, German, Greek, Hungarian, Icelandic, Indonesian, Irish, Italian,
-Japanese, Kazakh, Korean, Latin, Latvian, Lithuanian, Macedonian, Malay,
-Maltese, Mongolian, Norwegian, Polish, Portuguese, Romanian, Russian, Serbian,
-Slovak, Slovenian, Spanish, Swedish, Turkish, Ukrainian, Vietnamese, Welsh (48
-total)
+Every screen has its own controls shown contextually — press `?` at any time
+for the full in-app reference.
 
 ## Contributing
 
@@ -164,11 +79,14 @@ cargo clippy      # lint
 
 ## License
 
-Licensed under [GPL-3.0](LICENSE.md).
+This project is licensed under the **[GNU GPL-3.0-only](LICENSE.md)**. In
+short: you're free to use, modify, and redistribute this software, but any
+distributed derivative work must also be licensed under GPL-3.0 and its
+source made available.
 
-Word lists (`static/languages/`) and quote collections (`static/quotes/`) are
-taken from
-[monkeytypegame/monkeytype](https://github.com/monkeytypegame/monkeytype) and
-distributed under the same license. No modifications were made to the data
-files. The game logic, UI, and Rust source code are original work unaffiliated
-with the monkeytype project.
+**Third-party data:** word lists (`static/languages/`) and quote collections
+(`static/quotes/`) are copied unmodified from
+[monkeytypegame/monkeytype](https://github.com/monkeytypegame/monkeytype),
+which is also GPL-3.0-licensed. All game logic, UI, and Rust source code in
+this repository are original work and unaffiliated with the monkeytype
+project.
