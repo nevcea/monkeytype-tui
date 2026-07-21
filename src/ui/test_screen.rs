@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::{Line, Span},
-    widgets::{Clear, Gauge, Paragraph},
+    widgets::{Gauge, Paragraph},
 };
 
 use crate::app::{App, word_lines};
@@ -20,11 +20,11 @@ const WORD_LINES_MAX: usize = 7;
 
 pub(super) fn draw_test(f: &mut Frame, app: &App) {
     let area = f.area();
-    let [header_a, _, words_a, _, stats_a, _] = Layout::vertical([
+    let [header_a, _, words_a, hint_a, stats_a, _] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
-        Constraint::Min(3), // word display (grows with terminal height)
-        Constraint::Length(1),
+        Constraint::Min(3),    // word display (grows with terminal height)
+        Constraint::Length(1), // pre-start hint
         Constraint::Length(1),
         Constraint::Length(1),
     ])
@@ -41,9 +41,8 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
     if !app.game.is_finished() {
         place_cursor(f, &block, &app.game);
     }
-    // Drawn after the words so it overwrites the row beneath the first line.
     if app.game.started_at.is_none() {
-        draw_start_hint(f, &block);
+        draw_start_hint(f, hint_a);
     }
 
     draw_live_stats(f, stats_a, app);
@@ -168,21 +167,17 @@ fn place_cursor(f: &mut Frame, block: &WordBlock, game: &GameState) {
     }
 }
 
-fn draw_start_hint(f: &mut Frame, block: &WordBlock) {
-    let hint_area = Rect {
-        x: block.inner.x,
-        y: block.inner.y + 1,
-        width: block.inner.width,
-        height: 1,
-    };
-    f.render_widget(Clear, hint_area);
+/// Rendered in the gap below the word block. It used to `Clear` the row
+/// beneath the first word line and draw over it, which meant the second line
+/// of upcoming words was missing until the first keystroke put it back.
+fn draw_start_hint(f: &mut Frame, area: Rect) {
     f.render_widget(
         Paragraph::new(Span::styled(
             "start typing…",
             Style::default().fg(th_dim()).add_modifier(Modifier::ITALIC),
         ))
         .alignment(Alignment::Center),
-        hint_area,
+        area,
     );
 }
 
@@ -416,6 +411,43 @@ mod tests {
         }
         let row = header(&app);
         assert!(row.contains("5 / 5"), "finished gauge: {row:?}");
+    }
+
+    /// The hint used to `Clear` the row beneath the first word line and draw
+    /// itself there, so the second line of upcoming words was blank until the
+    /// first keystroke restored it — the block visibly jumped as you started.
+    /// Typing must not change any row of the word block.
+    #[test]
+    fn the_start_hint_does_not_blank_a_line_of_words() {
+        use crate::app::{App, Screen};
+        use crate::ui::test_render::rows;
+
+        let mut app = App::new();
+        app.screen = Screen::Test;
+        app.game = GameState::new(Mode::Words(50), Settings::default(), vec![]);
+
+        // At 80x24 the layout is: gauge 0, gap 1, words 2..=20, hint 21,
+        // stats 22, footer 23.
+        const WORDS: std::ops::RangeInclusive<usize> = 2..=20;
+        const HINT: usize = 21;
+
+        let before = rows(80, 24, |f| crate::ui::draw(f, &app));
+        assert!(
+            before[HINT].contains("start typing"),
+            "the hint belongs in the gap below the word block, not inside it:\n{before:#?}"
+        );
+
+        let ch = app.game.chars[0].expected;
+        app.game.type_char(ch);
+        let after = rows(80, 24, |f| crate::ui::draw(f, &app));
+
+        for i in WORDS {
+            assert_eq!(
+                before[i].trim_end(),
+                after[i].trim_end(),
+                "word row {i} changed when typing started:\n{before:#?}\n{after:#?}"
+            );
+        }
     }
 
     /// A letter mistyped as a space renders as a middle dot rather than a
