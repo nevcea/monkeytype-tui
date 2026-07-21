@@ -3,7 +3,7 @@
 
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout, Rect},
+    layout::{Alignment, Constraint, Layout},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
@@ -51,15 +51,7 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         .collect();
 
     let height = (rows.len() + 5) as u16;
-    let area = centered_rect(40, 0, f.area());
-    let area = Rect {
-        x: area.x,
-        y: f.area().height.saturating_sub(height) / 2,
-        width: area.width,
-        height: height.min(f.area().height),
-    };
-
-    let inner = dialog_block(f, area, None);
+    let inner = dialog_block(f, centered_block(f.area(), 40, height), None);
     let [title_a, _gap_a, items_a, _] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),

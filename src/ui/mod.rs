@@ -77,14 +77,7 @@ pub fn draw(f: &mut Frame, app: &App) {
 }
 
 fn draw_confirm(f: &mut Frame, title: &str, is_yes: bool) {
-    let area = centered_rect(40, 0, f.area());
-    let area = Rect {
-        x: area.x,
-        y: f.area().height.saturating_sub(5) / 2,
-        width: area.width,
-        height: 5,
-    };
-    let inner = dialog_block(f, area, None);
+    let inner = dialog_block(f, centered_block(f.area(), 40, 5), None);
     let sel = Style::default()
         .fg(th_accent())
         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
@@ -137,6 +130,26 @@ pub(super) fn pin_footer(frame: Rect, height: u16) -> Rect {
         y: frame.bottom().saturating_sub(height),
         width: frame.width,
         height: height.min(frame.height),
+    }
+}
+
+/// A rect `pct_x`% of the frame's width and exactly `height` rows tall,
+/// centred in `frame`.
+///
+/// Prefer this over a percentage height whenever the content has a fixed row
+/// count. A percentage-height rect silently starves a fixed-height layout on
+/// short terminals — the solver collapses rows to zero height and the
+/// `let [..] = split[..] else` guards never fire, because the rect *count*
+/// still matches. Here the content always gets the rows it asks for, and only
+/// a terminal shorter than `height` clamps it.
+pub(super) fn centered_block(frame: Rect, pct_x: u16, height: u16) -> Rect {
+    let width = frame.width * pct_x / 100;
+    let height = height.min(frame.height);
+    Rect {
+        x: frame.x + frame.width.saturating_sub(width) / 2,
+        y: frame.y + frame.height.saturating_sub(height) / 2,
+        width,
+        height,
     }
 }
 
