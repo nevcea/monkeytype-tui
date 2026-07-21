@@ -280,6 +280,56 @@ pub(super) fn kh(key: &str) -> Span<'static> {
     Span::styled(key.to_string(), Style::default().fg(th_sub()))
 }
 
+/// A footer hint: the key, and what it does.
+pub(super) type Hint = (&'static str, &'static str);
+
+/// Pack `hints` into as many lines as `width` needs, greedily.
+///
+/// Hint bars were hand-split into a fixed number of `Line`s, so on a narrow
+/// terminal the tail of each line was simply cut off — at `MIN_WIDTH` the
+/// menu's first row lost `q quit` entirely. Reflowing keeps every hint
+/// visible; callers size the footer from the returned line count.
+pub(super) fn hint_lines(hints: &[Hint], width: u16) -> Vec<Line<'static>> {
+    use unicode_width::UnicodeWidthStr;
+    /// Columns between two hints, matching [`sep`].
+    const GAP: usize = 3;
+
+    let width = width as usize;
+    let mut lines: Vec<Line<'static>> = vec![];
+    let mut spans: Vec<Span<'static>> = vec![];
+    let mut used = 0usize;
+    for (key, label) in hints {
+        let hint_w = key.width() + 1 + label.width();
+        if !spans.is_empty() && used + GAP + hint_w > width {
+            lines.push(Line::from(std::mem::take(&mut spans)));
+            used = 0;
+        }
+        if !spans.is_empty() {
+            spans.push(sep());
+            used += GAP;
+        }
+        spans.push(kh(key));
+        spans.push(Span::raw(format!(" {label}")));
+        used += hint_w;
+    }
+    if !spans.is_empty() {
+        lines.push(Line::from(spans));
+    }
+    lines
+}
+
+/// Renders `hints` as a reflowed bar pinned to the bottom of the frame.
+pub(super) fn draw_hint_footer(f: &mut Frame, hints: &[Hint]) {
+    let lines = hint_lines(hints, f.area().width);
+    let area = pin_footer(f.area(), lines.len() as u16);
+    f.render_widget(
+        Paragraph::new(lines)
+            .style(Style::default().fg(th_dim()))
+            .alignment(Alignment::Center),
+        area,
+    );
+}
+
 pub(super) fn col<S: Into<String>>(s: S, w: usize, color: Color) -> Span<'static> {
     use unicode_width::UnicodeWidthStr;
     // Pad by display width, not char count, so wide (CJK) names stay aligned.

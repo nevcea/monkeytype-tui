@@ -28,6 +28,7 @@ const HELP_SECTIONS: &[(&str, &[(&str, &str)])] = &[
             ("enter", "start test  (or open custom input)"),
             ("l", "open language picker"),
             ("t", "open theme picker"),
+            ("[ / ]", "change word pool size"),
             ("p", "toggle punctuation"),
             ("n", "toggle numbers"),
             ("s", "settings  (sound, volume, …)"),

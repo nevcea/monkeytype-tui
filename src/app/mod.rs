@@ -638,6 +638,32 @@ mod input_flow_tests {
         assert_eq!(app.menu.mode, Mode::Words(75));
     }
 
+    /// The menu renders the word-pool size with the same "selectable" styling
+    /// as the option row above it, but for a long time no menu key moved it —
+    /// it could only be changed from inside the language picker.
+    #[test]
+    fn bracket_keys_step_the_word_pool_size_within_range() {
+        let mut app = App::new();
+        // english has default/1k/5k/10k, so there is something to step through.
+        app.settings.lang_idx = 0;
+        app.settings.size_idx = 0;
+        let last = crate::words::lang_at(0).sizes.len() - 1;
+        assert!(last > 0, "test needs a multi-size language");
+
+        app.on_key(key(KeyCode::Char(']')));
+        assert_eq!(app.settings.size_idx, 1);
+        app.on_key(key(KeyCode::Char('[')));
+        assert_eq!(app.settings.size_idx, 0);
+
+        // Both ends clamp rather than wrapping or running past the list.
+        app.on_key(key(KeyCode::Char('[')));
+        assert_eq!(app.settings.size_idx, 0);
+        for _ in 0..20 {
+            app.on_key(key(KeyCode::Char(']')));
+        }
+        assert_eq!(app.settings.size_idx, last);
+    }
+
     /// Opens the custom-time input slot (the entry past the last preset in
     /// `TIME_OPTIONS`) the same way `Enter`/`Tab` would in the real menu.
     fn open_custom_time_input(app: &mut App) {

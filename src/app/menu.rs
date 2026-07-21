@@ -286,6 +286,11 @@ impl App {
             KeyCode::Left => self.step_menu(false),
             KeyCode::Right => self.step_menu(true),
 
+            // ←/→ is taken by the option row, and terminals disagree on how
+            // they report shift+arrow, so the word-pool size gets its own pair.
+            KeyCode::Char('[') => self.step_pool_size(false),
+            KeyCode::Char(']') => self.step_pool_size(true),
+
             KeyCode::Enter | KeyCode::Tab => {
                 if self.is_custom_slot() {
                     self.menu.custom_input = Some(String::new());
@@ -322,6 +327,21 @@ impl App {
             KeyCode::Char('?') => self.screen = Screen::Help,
             KeyCode::Char('q' | 'Q') | KeyCode::Esc => self.dialog.quit_confirm = true,
             _ => {}
+        }
+    }
+
+    /// Move the word-pool size within the current language's `sizes`. The
+    /// language picker has its own ←/→ for this, but it works on the picker's
+    /// pending `size_idx`; this one commits straight to `settings`.
+    fn step_pool_size(&mut self, forward: bool) {
+        let last = crate::words::lang_at(self.settings.lang_idx)
+            .sizes
+            .len()
+            .saturating_sub(1);
+        let next = step_option_idx(self.settings.size_idx, last, forward);
+        if next != self.settings.size_idx {
+            self.settings.size_idx = next;
+            self.persist();
         }
     }
 

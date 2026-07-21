@@ -148,10 +148,20 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         lang_a,
     );
 
-    let size_spans = label_row(
-        lang.sizes.iter().map(|sz| sz.label.to_string()),
-        app.settings.size_idx,
-    );
+    // `label_row` is the "this is selectable" styling, so only use it when
+    // there is actually a choice — otherwise `[`/`]` read as live keys on a
+    // row they can't move.
+    let size_spans = if lang.sizes.len() > 1 {
+        label_row(
+            lang.sizes.iter().map(|sz| sz.label.to_string()),
+            app.settings.size_idx,
+        )
+    } else {
+        vec![Span::styled(
+            lang.sizes[0].label,
+            Style::default().fg(th_dim()),
+        )]
+    };
     f.render_widget(
         Paragraph::new(Line::from(size_spans)).alignment(Alignment::Center),
         size_a,
@@ -181,56 +191,32 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         toggles_a,
     );
 
-    let footer_a = pin_footer(f.area(), 2);
-    let footer_paragraph = if app.menu.custom_input.is_some() {
-        Paragraph::new(Line::from(vec![
-            kh("enter"),
-            Span::raw(" start"),
-            sep(),
-            kh("esc"),
-            Span::raw(" cancel"),
-        ]))
-    } else {
-        Paragraph::new(vec![
-            Line::from(vec![
-                kh("enter"),
-                Span::raw(" start"),
-                sep(),
-                kh("1/2/3"),
-                Span::raw(" mode"),
-                sep(),
-                kh("←/→"),
-                Span::raw(" option"),
-                sep(),
-                kh("h"),
-                Span::raw(" history"),
-                sep(),
-                kh("?"),
-                Span::raw(" help"),
-                sep(),
-                kh("q"),
-                Span::raw(" quit"),
-            ]),
-            Line::from(vec![
-                kh("l"),
-                Span::raw(" lang"),
-                sep(),
-                kh("t"),
-                Span::raw(" theme"),
-                sep(),
-                kh("p"),
-                Span::raw(" punct"),
-                sep(),
-                kh("n"),
-                Span::raw(" numbers"),
-                sep(),
-                kh("s"),
-                Span::raw(" settings"),
-            ]),
-        ])
-    };
-    f.render_widget(footer_paragraph.alignment(Alignment::Center), footer_a);
+    draw_hint_footer(
+        f,
+        if app.menu.custom_input.is_some() {
+            CUSTOM_INPUT_HINTS
+        } else {
+            MENU_HINTS
+        },
+    );
 }
+
+const MENU_HINTS: &[Hint] = &[
+    ("enter", "start"),
+    ("1/2/3", "mode"),
+    ("←/→", "option"),
+    ("[/]", "pool"),
+    ("l", "lang"),
+    ("t", "theme"),
+    ("p", "punct"),
+    ("n", "numbers"),
+    ("s", "settings"),
+    ("h", "history"),
+    ("?", "help"),
+    ("q", "quit"),
+];
+
+const CUSTOM_INPUT_HINTS: &[Hint] = &[("enter", "start"), ("esc", "cancel")];
 
 #[cfg(test)]
 mod tests {
@@ -270,6 +256,20 @@ mod tests {
                     "row {expected:?} missing at 80x{h}:\n{screen}"
                 );
             }
+        }
+    }
+
+    /// Every menu hint must survive at the narrowest supported terminal. The
+    /// hand-split two-line footer used to lose `q quit` off the end of row 1.
+    #[test]
+    fn every_menu_hint_is_visible_at_the_minimum_terminal_width() {
+        let app = App::new();
+        let screen = text(MIN_WIDTH, MIN_HEIGHT, |f| draw_menu(f, &app));
+        for (key, label) in MENU_HINTS {
+            assert!(
+                screen.contains(&format!("{key} {label}")),
+                "hint {key:?} {label:?} missing at {MIN_WIDTH}x{MIN_HEIGHT}:\n{screen}"
+            );
         }
     }
 
