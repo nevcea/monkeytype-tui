@@ -16,21 +16,23 @@ paths:
 
 **Key invariant:** `GameState` is always rebuilt from scratch in `App::start_test()`; never mutate it incrementally between tests.
 
+**Layout invariant:** size a block from its *content* (`ui::centered_block`), not from a percentage of the terminal, whenever the rows inside it are fixed-height. A percentage rect over-constrains the solver on small terminals and it silently drops rows to zero height — the `let [..] = split[..] else` guards never fire, because the rect count still matches. Use `pct()` for the scaling part and `.max(..)` for the width below which the content clips. Screens are swept across heights by `ui::render_smoke_tests::every_screen_keeps_its_content_across_heights`; checking one or two sizes does not catch this.
+
 **Module roles:**
 
 | Module | Role |
 |---|---|
-| `app/mod.rs` | `App` struct: all UI state, screen transitions, shared helpers (`start_test()`, `word_lines()` used by both `app` and `ui`). Declares the `app::{help,history,menu,result,settings,test}` submodules |
+| `app/mod.rs` | `App` struct: all UI state, screen transitions, shared helpers used by both `app` and `ui` — `start_test()`, `word_lines()`, `word_block_width()` (the one place the word display's width and `WORD_BLOCK_MAX_WIDTH` cap live, so the renderer and `update_scroll` wrap identically), and `focus_cursor()`/`step_picker_cursor()` (list-selection scrolling, shared by both menu pickers and History). Declares the `app::{help,history,menu,result,settings,test}` submodules |
 | `app/{menu,test,result,history,settings,help}.rs` | One file per screen holding that screen's `App::handle_*` input-routing methods (e.g. `handle_menu`, `handle_test`). `app/settings.rs` also defines `SettingsRow`, the single source of settings-row order shared with `ui/settings.rs` |
 | `game.rs` | `GameState`: pure typing logic (WPM/accuracy/timers). No I/O |
-| `ui/mod.rs` | Entry point (`draw()`) that dispatches to per-screen submodules based on `App::screen`, plus layout helpers. Reads `App` + `GameState`, never mutates them |
+| `ui/mod.rs` | Entry point (`draw()`) that dispatches to per-screen submodules based on `App::screen`, plus the shared layout helpers: `centered_block`/`pct`/`center_h` (sizing), `hint_lines`/`draw_hint_footer` (footer key hints, reflowed to the terminal width so none are cut off), `draw_scrollbar` (drawn only when the content overflows), and the `test_render` module every `ui/*` test renders through. Reads `App` + `GameState`, never mutates them |
 | `ui/theme.rs` | `Theme` palette (built-ins plus user themes loaded from `data_dir()/themes/*.json`, selected via `Settings::theme_name`) and the per-frame `th_*()` color accessors used by every `ui/*` screen |
-| `ui/{menu,test_screen,result,history,help,settings}.rs` | One file per screen (`draw_menu`, `draw_test`, etc.), plus `help.rs` for the language picker overlay. Each screen's entry point only lays out regions and delegates one function per region (`test_screen`'s gauge/words/cursor/stats, `result`'s panels/chart) |
+| `ui/{menu,test_screen,result,history,help,settings}.rs` | One file per screen (`draw_menu`, `draw_test`, etc.), plus `help.rs` for the language picker overlay. Each screen's entry point only lays out regions and delegates one function per region (`test_screen`'s gauge/words/cursor/stats, `result`'s panels/chart). `help.rs` holds the keybinding reference as `HELP_SECTIONS` data — add new bindings there, and `line_count()` (re-exported as `ui::help_line_count`) keeps `App`'s scroll clamp in step automatically |
 | `words.rs` | `LANGUAGES` static: word lists embedded at compile time via `include_str!`, cached per (lang, size). Also contains `load_quotes_for`, and `lang_at`/`lang_name` — the one place an out-of-range `lang_idx` falls back, so every screen names the same language |
 | `pb.rs` | Personal best persistence (keyed by mode+lang) to `pb.json` |
 | `sound.rs` | `SoundPack` (Off/Click/Pop) and audio output via `rodio` |
 | `history.rs` | Persists results to `history.json` (max 50 entries) |
-| `storage.rs` | Shared `data_dir()` (XDG/HOME/APPDATA), atomic `write_atomic()`, and the `load_json()`/`save_json()` pair every persisted file goes through (`config`/`history`/`pb`). Loads degrade to `Default` on a missing/malformed file |
+| `storage.rs` | Shared `data_dir()` (XDG/HOME/APPDATA), atomic `write_atomic()`, and the `load_json()`/`save_json()` pair every persisted file goes through (`config`/`history`/`pb`). Loads degrade to `Default` on a missing/malformed file. Under `cfg!(test)` `data_dir()` returns a pid-keyed scratch dir — `App::new()` reads config and most state changes call `persist()`, so the real dir would be read and overwritten by the test suite |
 | `macros.rs` | `cycle_enum!` macro for settings enums that cycle via `next`/`prev`/`label`, and exposes `ALL` — render the full set from that, never a hand-written second list |
 
 **Screen flow:** `Menu → Test → Result`, with `History`, `Help`, and `Settings` as overlays reachable from `Menu`. Overlays (language picker, quit/abandon confirm dialogs) are drawn on top in `ui::draw` regardless of the active screen.
