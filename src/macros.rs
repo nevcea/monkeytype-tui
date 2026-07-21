@@ -1,8 +1,11 @@
 //! Shared declarative macros.
 
 /// Define a small enum that cycles through its variants via `next()`/`prev()`
-/// and exposes a static `label()`. Removes the near-identical `next`/`prev`/
-/// `label` match triples repeated across settings enums.
+/// and exposes a static `label()` plus an `ALL` slice of every variant in
+/// declaration order. Removes the near-identical `next`/`prev`/`label` match
+/// triples repeated across settings enums, and gives any UI that renders the
+/// whole set (e.g. the quote-filter row) the same order the cycling uses,
+/// rather than a hand-maintained second copy that can silently drift.
 ///
 /// ```ignore
 /// cycle_enum! {
@@ -25,20 +28,22 @@ macro_rules! cycle_enum {
         }
 
         impl $name {
+            /// Every variant in declaration order. Single source of order for
+            /// `next`/`prev` and for rendering the full set.
+            pub const ALL: &'static [$name] = &[ $( $name::$variant ),+ ];
+
             pub fn label(self) -> &'static str {
                 match self { $( Self::$variant => $label ),+ }
             }
 
             pub fn next(self) -> Self {
-                const ORDER: &[$name] = &[ $( $name::$variant ),+ ];
-                let i = ORDER.iter().position(|&v| v == self).unwrap_or(0);
-                ORDER[(i + 1) % ORDER.len()]
+                let i = Self::ALL.iter().position(|&v| v == self).unwrap_or(0);
+                Self::ALL[(i + 1) % Self::ALL.len()]
             }
 
             pub fn prev(self) -> Self {
-                const ORDER: &[$name] = &[ $( $name::$variant ),+ ];
-                let i = ORDER.iter().position(|&v| v == self).unwrap_or(0);
-                ORDER[(i + ORDER.len() - 1) % ORDER.len()]
+                let i = Self::ALL.iter().position(|&v| v == self).unwrap_or(0);
+                Self::ALL[(i + Self::ALL.len() - 1) % Self::ALL.len()]
             }
         }
 
@@ -56,6 +61,24 @@ mod tests {
         #[derive(Clone, Copy, PartialEq, Debug)]
         enum Tri { A = "a", B = "b", C = "c" }
         default = A;
+    }
+
+    #[test]
+    fn all_lists_every_variant_in_declaration_order() {
+        assert_eq!(Tri::ALL, &[Tri::A, Tri::B, Tri::C]);
+    }
+
+    /// `ALL` is both what `next`/`prev` cycle through and what the UI renders.
+    /// If the two ever disagreed, a variant could be reachable by keypress but
+    /// missing from the row on screen.
+    #[test]
+    fn next_walks_all_in_declaration_order() {
+        let mut v = Tri::ALL[0];
+        for &expected in Tri::ALL {
+            assert_eq!(v, expected);
+            v = v.next();
+        }
+        assert_eq!(v, Tri::ALL[0], "cycle must wrap back to the first variant");
     }
 
     #[test]

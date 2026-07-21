@@ -102,13 +102,9 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
             let has_quotes = lang_at(app.settings.lang_idx).quotes.is_some();
             if has_quotes {
                 let f = app.settings.quote_filter;
-                let filters = [
-                    QuoteFilter::All,
-                    QuoteFilter::Short,
-                    QuoteFilter::Medium,
-                    QuoteFilter::Long,
-                    QuoteFilter::Thicc,
-                ];
+                // Driven by the same ORDER `next`/`prev` cycle through, so a new
+                // filter variant can't appear in one and be missing from the other.
+                let filters = QuoteFilter::ALL;
                 let mut spans = vec![];
                 for (i, &filter) in filters.iter().enumerate() {
                     let active = f == filter;
@@ -270,4 +266,44 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         ])
     };
     f.render_widget(footer_paragraph.alignment(Alignment::Center), footer_a);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::App;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    fn rendered_text(app: &App) -> String {
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal.draw(|f| draw_menu(f, app)).unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    /// The quote-filter row renders `QuoteFilter::ALL`, the same order
+    /// `next`/`prev` cycle through. This catches a variant that is reachable
+    /// with ←/→ but never drawn (what a hand-written second list allowed).
+    #[test]
+    fn quote_mode_renders_every_quote_filter() {
+        let mut app = App::new();
+        app.menu.mode = Mode::Quote;
+        app.settings.lang_idx = 0; // english, which has quotes
+        let text = rendered_text(&app);
+        for filter in QuoteFilter::ALL {
+            assert!(
+                text.contains(filter.label()),
+                "filter {} missing from the menu: {text}",
+                filter.label()
+            );
+        }
+    }
 }
