@@ -2,7 +2,7 @@
 
 use ratatui::{
     Frame,
-    layout::{Alignment, Constraint, Layout},
+    layout::{Alignment, Constraint, Layout, Margin},
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
@@ -154,10 +154,16 @@ pub(super) fn draw_help(f: &mut Frame, app: &App) {
     let visible = body_a.height as usize;
     let scroll = app.help_scroll.min(total.saturating_sub(visible));
 
+    // Leave a gutter when the scrollbar is showing, so the section rules stop
+    // short of it instead of running underneath it.
+    let content_w = body_a
+        .width
+        .saturating_sub(if total > visible { 2 } else { 0 });
     f.render_widget(
-        Paragraph::new(help_body(body_a.width)).scroll((scroll as u16, 0)),
+        Paragraph::new(help_body(content_w)).scroll((scroll as u16, 0)),
         body_a,
     );
+    draw_scrollbar(f, body_a, total, visible, scroll);
 
     let mut hints = vec![kh("esc"), Span::raw(" back")];
     if total > visible {
@@ -188,9 +194,19 @@ struct PickerChrome<'a> {
     visible: usize,
     /// Unfiltered total, shown as the `(matched/total)` counter.
     total: usize,
-    /// Key hints between "navigate" and "cancel" (the language picker adds
+    /// Key hints between "navigate" and "select" (the language picker adds
     /// `←/→ size`, the theme picker doesn't).
-    extra_hints: Vec<Span<'static>>,
+    extra_hints: &'static [Hint],
+}
+
+/// The picker's footer hints, reflowed to `width`. All four together need 51
+/// columns and the popup's inner width is 39 at an 80-column terminal, so a
+/// single fixed line dropped `esc cancel` off the end.
+fn picker_hint_lines(chrome: &PickerChrome, width: u16) -> Vec<Line<'static>> {
+    let mut hints: Vec<Hint> = vec![("↑/↓", "navigate")];
+    hints.extend_from_slice(chrome.extra_hints);
+    hints.extend_from_slice(&[("enter", "select"), ("esc", "cancel")]);
+    hint_lines(&hints, width)
 }
 
 /// Draws the standard picker overlay — bordered popup, search line with match
@@ -216,12 +232,15 @@ fn draw_picker<T>(
         )),
     );
 
+    // Sized from the reflowed hints, so the footer grows to fit them instead
+    // of cutting the last one off.
+    let hint_rows = picker_hint_lines(chrome, inner.width);
     let [search_a, _, list_a, _, footer_a] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Min(0),
         Constraint::Length(1),
-        Constraint::Length(1),
+        Constraint::Length(hint_rows.len() as u16),
     ])
     .split(inner)[..] else {
         return;
@@ -250,25 +269,21 @@ fn draw_picker<T>(
         .collect();
     f.render_widget(Paragraph::new(rows), list_a);
 
-    let scroll_info = if items.len() > chrome.visible {
-        format!(" {}/{} ", chrome.cursor + 1, items.len())
-    } else {
-        String::new()
-    };
-
-    let mut hints = vec![kh("↑/↓"), Span::raw(" navigate"), sep()];
-    hints.extend(chrome.extra_hints.iter().cloned());
-    hints.extend([
-        kh("enter"),
-        Span::raw(" select"),
-        sep(),
-        kh("esc"),
-        Span::raw(" cancel"),
-        Span::styled(scroll_info, Style::default().fg(th_dim())),
-    ]);
+    // On the popup's right border rather than `inner`, which `dialog_block`
+    // has already padded in by two columns.
+    draw_scrollbar(
+        f,
+        area.inner(Margin {
+            vertical: 1,
+            horizontal: 0,
+        }),
+        items.len(),
+        chrome.visible,
+        chrome.scroll,
+    );
 
     f.render_widget(
-        Paragraph::new(Line::from(hints))
+        Paragraph::new(hint_rows)
             .style(Style::default().fg(th_dim()))
             .alignment(Alignment::Center),
         footer_a,
@@ -309,7 +324,7 @@ pub(super) fn draw_lang_picker(f: &mut Frame, app: &App) {
             scroll: picker.scroll,
             visible: LANG_PICKER_VISIBLE,
             total: LANGUAGES.len(),
-            extra_hints: vec![kh("←/→"), Span::raw(" size"), sep()],
+            extra_hints: &[("←/→", "size")],
         },
         &filtered,
         |(_, lang), selected| {
@@ -356,7 +371,7 @@ pub(super) fn draw_theme_picker(f: &mut Frame, app: &App) {
             scroll: picker.scroll,
             visible: THEME_PICKER_VISIBLE,
             total: all_themes().len(),
-            extra_hints: vec![],
+            extra_hints: &[],
         },
         &filtered,
         |(_, t), selected| {
@@ -428,6 +443,49 @@ mod help_tests {
             app.on_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
         }
         assert_eq!(app.help_scroll, 0);
+    }
+
+    fn picker_app(search: &str) -> App {
+        let mut app = App::new();
+        app.menu.lang_picker = Some(crate::app::LangPicker {
+            cursor: 0,
+            size_idx: 0,
+            scroll: 0,
+            search: search.to_string(),
+        });
+        app
+    }
+
+    /// All four hints need 51 columns and the popup's inner width is 39 at an
+    /// 80-column terminal, so `esc cancel` used to fall off the end of the
+    /// single fixed footer line.
+    #[test]
+    fn the_picker_footer_keeps_every_hint() {
+        let app = picker_app("");
+        let screen = text(80, 24, |f| crate::ui::draw(f, &app));
+        for hint in ["↑/↓ navigate", "←/→ size", "enter select", "esc cancel"] {
+            assert!(
+                screen.contains(hint),
+                "picker footer lost {hint:?}:\n{screen}"
+            );
+        }
+    }
+
+    /// A track beside a list that already fits reads as "there is more below"
+    /// when there isn't, so it only appears once the list overflows.
+    #[test]
+    fn the_picker_scrollbar_appears_only_when_the_list_overflows() {
+        let all = picker_app("");
+        assert!(
+            text(80, 24, |f| crate::ui::draw(f, &all)).contains('█'),
+            "48 languages should overflow a 12-row list"
+        );
+
+        let one = picker_app("esperanto");
+        assert!(
+            !text(80, 24, |f| crate::ui::draw(f, &one)).contains('█'),
+            "a single match should not get a scrollbar"
+        );
     }
 
     /// `line_count` drives `App`'s scroll clamp, so it must stay derived from

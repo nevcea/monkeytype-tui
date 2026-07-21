@@ -117,6 +117,13 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
             .collect()
     };
     f.render_widget(Paragraph::new(lines), entries_a);
+    draw_scrollbar(
+        f,
+        entries_a,
+        app.history.len(),
+        max_rows,
+        app.history_scroll,
+    );
 
     // Position of the selection, not of the viewport — with a selected row the
     // count only means something if it tracks what is highlighted.

@@ -7,7 +7,7 @@ use ratatui::{
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph, Scrollbar, ScrollbarOrientation, ScrollbarState},
 };
 
 use crate::app::App;
@@ -176,6 +176,36 @@ pub(super) fn centered_rect(pct_x: u16, pct_y: u16, r: Rect) -> Rect {
         Constraint::Percentage((100 - pct_x) / 2),
     ])
     .split(v[1])[1]
+}
+
+/// Draws a vertical scrollbar down the right edge of `area`.
+///
+/// Only when the list overflows: a full-height track beside a list that
+/// already fits reads as "there is more below" when there isn't. Every
+/// scrollable view here previously advertised itself with an `n/m` counter
+/// alone, which says nothing about how far through you are.
+pub(super) fn draw_scrollbar(
+    f: &mut Frame,
+    area: Rect,
+    total: usize,
+    visible: usize,
+    position: usize,
+) {
+    if total <= visible {
+        return;
+    }
+    let mut state = ScrollbarState::new(total)
+        .viewport_content_length(visible)
+        .position(position);
+    f.render_stateful_widget(
+        Scrollbar::new(ScrollbarOrientation::VerticalRight)
+            .begin_symbol(None)
+            .end_symbol(None)
+            .track_style(Style::default().fg(th_dim()))
+            .thumb_style(Style::default().fg(th_sub())),
+        area,
+        &mut state,
+    );
 }
 
 /// Narrow `r` to `width` columns, centred horizontally, keeping y and height.
