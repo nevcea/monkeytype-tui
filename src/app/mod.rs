@@ -589,6 +589,36 @@ mod input_flow_tests {
         assert_eq!(app.history_scroll, 3);
     }
 
+    /// Stepping onto the custom slot and re-selecting the mode with `1`/`2`
+    /// are two separate code paths that must resolve the slot the same way —
+    /// to the stored custom value, not to a preset.
+    #[test]
+    fn custom_slot_resolves_to_the_stored_value_from_both_paths() {
+        let mut app = App::new();
+        app.menu.custom_time_val = 45;
+        app.menu.custom_words_val = 75;
+
+        app.menu.time_idx = 0;
+        app.menu.mode = Mode::Time(TIME_OPTIONS[0]);
+        for _ in 0..TIME_OPTIONS.len() {
+            app.on_key(key(KeyCode::Right));
+        }
+        assert!(app.is_custom_slot());
+        assert_eq!(app.menu.mode, Mode::Time(45));
+        app.on_key(key(KeyCode::Char('1')));
+        assert_eq!(app.menu.mode, Mode::Time(45));
+
+        app.menu.word_idx = 0;
+        app.menu.mode = Mode::Words(WORD_OPTIONS[0]);
+        for _ in 0..WORD_OPTIONS.len() {
+            app.on_key(key(KeyCode::Right));
+        }
+        assert!(app.is_custom_slot());
+        assert_eq!(app.menu.mode, Mode::Words(75));
+        app.on_key(key(KeyCode::Char('2')));
+        assert_eq!(app.menu.mode, Mode::Words(75));
+    }
+
     /// Opens the custom-time input slot (the entry past the last preset in
     /// `TIME_OPTIONS`) the same way `Enter`/`Tab` would in the real menu.
     fn open_custom_time_input(app: &mut App) {

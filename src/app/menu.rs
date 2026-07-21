@@ -4,8 +4,8 @@
 use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{
-    App, LANG_PICKER_VISIBLE, LangPicker, Screen, THEME_PICKER_VISIBLE, TIME_OPTIONS, ThemePicker,
-    WORD_OPTIONS, filtered_languages, filtered_themes,
+    App, LANG_PICKER_VISIBLE, LangPicker, MenuState, Screen, THEME_PICKER_VISIBLE, TIME_OPTIONS,
+    ThemePicker, WORD_OPTIONS, filtered_languages, filtered_themes,
 };
 use crate::game::Mode;
 use crate::words::load_quotes_for;
@@ -53,6 +53,30 @@ fn step_option_idx(idx: usize, len: usize, forward: bool) -> usize {
         (idx + 1).min(len)
     } else {
         idx.saturating_sub(1)
+    }
+}
+
+impl MenuState {
+    /// The time mode the current selection means: the highlighted preset, or
+    /// the stored custom value when the cursor sits on the custom slot (whose
+    /// index is `TIME_OPTIONS.len()`, past the end of the presets).
+    fn time_mode(&self) -> Mode {
+        Mode::Time(
+            TIME_OPTIONS
+                .get(self.time_idx)
+                .copied()
+                .unwrap_or(self.custom_time_val),
+        )
+    }
+
+    /// Word-count counterpart of [`Self::time_mode`].
+    fn words_mode(&self) -> Mode {
+        Mode::Words(
+            WORD_OPTIONS
+                .get(self.word_idx)
+                .copied()
+                .unwrap_or(self.custom_words_val),
+        )
     }
 }
 
@@ -255,22 +279,8 @@ impl App {
 
     fn handle_menu_main(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('1') => {
-                self.menu.mode = Mode::Time(
-                    TIME_OPTIONS
-                        .get(self.menu.time_idx)
-                        .copied()
-                        .unwrap_or(self.menu.custom_time_val),
-                )
-            }
-            KeyCode::Char('2') => {
-                self.menu.mode = Mode::Words(
-                    WORD_OPTIONS
-                        .get(self.menu.word_idx)
-                        .copied()
-                        .unwrap_or(self.menu.custom_words_val),
-                )
-            }
+            KeyCode::Char('1') => self.menu.mode = self.menu.time_mode(),
+            KeyCode::Char('2') => self.menu.mode = self.menu.words_mode(),
             KeyCode::Char('3') => self.menu.mode = Mode::Quote,
 
             KeyCode::Left => self.step_menu(false),
@@ -320,22 +330,12 @@ impl App {
             Mode::Time(_) => {
                 self.menu.time_idx =
                     step_option_idx(self.menu.time_idx, TIME_OPTIONS.len(), forward);
-                self.menu.mode = Mode::Time(
-                    TIME_OPTIONS
-                        .get(self.menu.time_idx)
-                        .copied()
-                        .unwrap_or(self.menu.custom_time_val),
-                );
+                self.menu.mode = self.menu.time_mode();
             }
             Mode::Words(_) => {
                 self.menu.word_idx =
                     step_option_idx(self.menu.word_idx, WORD_OPTIONS.len(), forward);
-                self.menu.mode = Mode::Words(
-                    WORD_OPTIONS
-                        .get(self.menu.word_idx)
-                        .copied()
-                        .unwrap_or(self.menu.custom_words_val),
-                );
+                self.menu.mode = self.menu.words_mode();
             }
             Mode::Quote => {
                 self.settings.quote_filter = if forward {
