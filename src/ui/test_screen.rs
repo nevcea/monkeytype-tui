@@ -21,12 +21,12 @@ const WORD_LINES_MAX: usize = 7;
 pub(super) fn draw_test(f: &mut Frame, app: &App) {
     let area = f.area();
     let [header_a, _, words_a, _, stats_a, _] = Layout::vertical([
-        Constraint::Length(1), // gauge / counter
-        Constraint::Length(1), // gap
-        Constraint::Min(3),    // word display (grows with terminal height)
-        Constraint::Length(1), // gap
-        Constraint::Length(1), // live wpm/acc
-        Constraint::Length(1), // key hints
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(3), // word display (grows with terminal height)
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .split(area)[..] else {
         return;

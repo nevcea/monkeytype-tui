@@ -54,9 +54,9 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
     let [lwpm_a, lacc_a, _, ltype_a, _, lraw_a, src_a] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Length(2),
-        Constraint::Length(1), // gap
+        Constraint::Length(1),
         Constraint::Length(3),
-        Constraint::Length(1), // gap
+        Constraint::Length(1),
         Constraint::Length(2),
         Constraint::Min(1),
     ])

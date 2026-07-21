@@ -30,17 +30,17 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         _,
         _,
     ] = Layout::vertical([
-        Constraint::Length(1), // title
-        Constraint::Length(1), // gap
+        Constraint::Length(1),
+        Constraint::Length(1),
         Constraint::Length(1), // mode tabs  1·time  2·words  3·quote
-        Constraint::Length(1), // option row
-        Constraint::Length(1), // gap
-        Constraint::Length(1), // language
-        Constraint::Length(1), // size options
-        Constraint::Length(1), // gap
-        Constraint::Length(1), // toggles
-        Constraint::Min(0),    // spacer
-        Constraint::Length(2), // footer hints
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(2),
     ])
     .split(area)[..]
     else {

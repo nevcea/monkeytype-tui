@@ -15,13 +15,13 @@ use super::*;
 pub(super) fn draw_history(f: &mut Frame, app: &App) {
     let area = centered_rect(60, 80, f.area());
     let [title_a, _, summary_a, _, header_a, entries_a, _] = Layout::vertical([
-        Constraint::Length(1), // title
-        Constraint::Length(1), // gap
-        Constraint::Length(1), // summary stats
-        Constraint::Length(1), // gap
-        Constraint::Length(1), // column header
-        Constraint::Min(0),    // entries
-        Constraint::Length(1), // footer
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(0),
+        Constraint::Length(1),
     ])
     .split(area)[..] else {
         return;

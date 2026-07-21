@@ -28,7 +28,8 @@ pub struct PersistedConfig {
 
 impl Default for PersistedConfig {
     fn default() -> Self {
-        // Mirrors the first-run defaults in `App::new`.
+        // The only first-run defaults; `App::new` has none of its own — it
+        // always starts from `load_config()`, which falls back to this impl.
         Self {
             settings: Settings::default(),
             sound_pack: SoundPack::Click,

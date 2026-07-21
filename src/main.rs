@@ -106,7 +106,6 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
     let mut app = App::new();
 
     loop {
-        // Track terminal size for scroll and layout calculations
         let size = terminal.size()?;
         app.last_width = size.width;
         app.last_height = size.height;
