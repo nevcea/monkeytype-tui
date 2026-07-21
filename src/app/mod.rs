@@ -475,8 +475,7 @@ impl App {
             self.scroll_word = 0;
             return;
         }
-        let pad = (self.last_width as usize / 10).clamp(4, 10);
-        let width = (self.last_width as usize).saturating_sub(2 * pad);
+        let width = word_block_width(self.last_width) as usize;
         if width < 10 {
             return;
         }
@@ -504,6 +503,23 @@ impl App {
             self.scroll_word = line1_start;
         }
     }
+}
+
+/// Widest the word display is allowed to get. A typing test is read like
+/// prose, and much past ~70 columns the sweep back to the start of the next
+/// line gets hard to track — on a 200-column terminal the block was 180
+/// characters wide, seven lines deep.
+pub const WORD_BLOCK_MAX_WIDTH: u16 = 72;
+
+/// Columns the word display occupies on a `term_width`-wide terminal.
+///
+/// Both `ui::test_screen` (laying the block out) and [`App::update_scroll`]
+/// (wrapping the same words to decide when to scroll) need this. They used to
+/// carry separate copies of the padding arithmetic, so a change to one
+/// silently made the scroll wrap differently from the render.
+pub fn word_block_width(term_width: u16) -> u16 {
+    let pad = (term_width / 10).clamp(4, 10);
+    term_width.saturating_sub(2 * pad).min(WORD_BLOCK_MAX_WIDTH)
 }
 
 /// Layout words into wrapped lines. Returns word-index groups per line.

@@ -178,11 +178,13 @@ pub(super) fn centered_rect(pct_x: u16, pct_y: u16, r: Rect) -> Rect {
     .split(v[1])[1]
 }
 
-pub(super) fn horiz_pad(r: Rect, pad: u16) -> Rect {
+/// Narrow `r` to `width` columns, centred horizontally, keeping y and height.
+pub(super) fn center_h(r: Rect, width: u16) -> Rect {
+    let width = width.min(r.width);
     Rect {
-        x: r.x + pad,
+        x: r.x + r.width.saturating_sub(width) / 2,
         y: r.y,
-        width: r.width.saturating_sub(pad * 2),
+        width,
         height: r.height,
     }
 }

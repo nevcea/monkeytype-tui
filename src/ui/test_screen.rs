@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Gauge, Paragraph},
 };
 
-use crate::app::{App, word_lines};
+use crate::app::{App, word_block_width, word_lines};
 use crate::game::{CharState, CursorShape, GameState, Mode};
 use crate::words::lang_name;
 
@@ -32,11 +32,13 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
         return;
     };
 
-    let pad = (area.width / 10).clamp(4, 10);
+    // Gauge and words share one centred column, so the progress bar stays
+    // visually tied to the text it measures instead of spanning the terminal.
+    let width = word_block_width(area.width);
 
-    draw_progress_gauge(f, horiz_pad(header_a, pad), &app.game);
+    draw_progress_gauge(f, center_h(header_a, width), &app.game);
 
-    let block = WordBlock::new(horiz_pad(words_a, pad), app);
+    let block = WordBlock::new(center_h(words_a, width), app);
     draw_word_lines(f, &block, app);
     if !app.game.is_finished() {
         place_cursor(f, &block, &app.game);
@@ -411,6 +413,54 @@ mod tests {
         }
         let row = header(&app);
         assert!(row.contains("5 / 5"), "finished gauge: {row:?}");
+    }
+
+    /// The block width used to be terminal width minus a padding of at most
+    /// 10 a side, so a 200-column terminal gave 180-character lines — seven
+    /// of them. It is capped and centred now.
+    #[test]
+    fn the_word_block_is_capped_and_centred_on_a_wide_terminal() {
+        use crate::app::{App, Screen, WORD_BLOCK_MAX_WIDTH};
+        use crate::ui::test_render::rows;
+
+        let mut app = App::new();
+        app.screen = Screen::Test;
+        app.game = GameState::new(Mode::Words(200), Settings::default(), vec![]);
+
+        // At 200x50 the layout is: gauge 0, gap 1, words 2..=46, hint 47,
+        // stats 48, footer 49.
+        let screen = rows(200, 50, |f| crate::ui::draw(f, &app));
+        let mut measured = 0;
+        for (i, row) in screen.iter().enumerate().take(47).skip(2) {
+            let Some(first) = row.find(|c: char| c != ' ') else {
+                continue;
+            };
+            let last = row.rfind(|c: char| c != ' ').unwrap();
+            measured += 1;
+            assert!(
+                last - first < WORD_BLOCK_MAX_WIDTH as usize,
+                "word row {i} spans {} columns:\n{row}",
+                last - first + 1
+            );
+            assert!(
+                first > 50,
+                "word row {i} starts at column {first}, so the block is not centred:\n{row}"
+            );
+        }
+        assert!(
+            measured > 1,
+            "expected several word rows, measured {measured}"
+        );
+    }
+
+    /// The renderer and the scroll must wrap the words identically; they used
+    /// to hold separate copies of the padding arithmetic.
+    #[test]
+    fn word_block_width_is_capped_but_shrinks_with_the_terminal() {
+        use crate::app::{WORD_BLOCK_MAX_WIDTH, word_block_width};
+        assert_eq!(word_block_width(200), WORD_BLOCK_MAX_WIDTH);
+        assert_eq!(word_block_width(80), 64, "80 - 2*8 padding");
+        assert_eq!(word_block_width(60), 48, "60 - 2*6 padding");
     }
 
     /// The hint used to `Clear` the row beneath the first word line and draw
