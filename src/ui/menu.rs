@@ -80,7 +80,8 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
     let opts_line = match app.menu.mode {
         Mode::Time(_) => {
             let mut spans = option_spans(TIME_OPTIONS, app.menu.time_idx, "s");
-            spans.push(Span::raw("  "));
+            // Wider than `label_row`'s inter-label gap, to set the custom slot apart.
+            spans.push(Span::raw("    "));
             spans.push(custom_slot(
                 app.menu.time_idx == TIME_OPTIONS.len(),
                 "s",
@@ -90,7 +91,7 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         }
         Mode::Words(_) => {
             let mut spans = option_spans(WORD_OPTIONS, app.menu.word_idx, "");
-            spans.push(Span::raw("  "));
+            spans.push(Span::raw("    "));
             spans.push(custom_slot(
                 app.menu.word_idx == WORD_OPTIONS.len(),
                 "",
@@ -99,33 +100,17 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
             Line::from(spans)
         }
         Mode::Quote => {
-            let has_quotes = lang_at(app.settings.lang_idx).quotes.is_some();
-            if has_quotes {
-                let f = app.settings.quote_filter;
+            if lang_at(app.settings.lang_idx).quotes.is_some() {
                 // Driven by the same ORDER `next`/`prev` cycle through, so a new
                 // filter variant can't appear in one and be missing from the other.
-                let filters = QuoteFilter::ALL;
-                let mut spans = vec![];
-                for (i, &filter) in filters.iter().enumerate() {
-                    let active = f == filter;
-                    if active {
-                        spans.push(Span::styled(
-                            filter.label(),
-                            Style::default()
-                                .fg(th_accent())
-                                .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                        ));
-                    } else {
-                        spans.push(Span::styled(
-                            filter.label(),
-                            Style::default().fg(th_pending()),
-                        ));
-                    }
-                    if i + 1 < filters.len() {
-                        spans.push(Span::raw("  "));
-                    }
-                }
-                Line::from(spans)
+                let selected = QuoteFilter::ALL
+                    .iter()
+                    .position(|&f| f == app.settings.quote_filter)
+                    .unwrap_or(0);
+                Line::from(label_row(
+                    QuoteFilter::ALL.iter().map(|f| f.label().to_string()),
+                    selected,
+                ))
             } else {
                 Line::from(Span::styled(
                     "no quotes available for this language",
@@ -166,28 +151,10 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         lang_a,
     );
 
-    let size_spans: Vec<Span> = lang
-        .sizes
-        .iter()
-        .enumerate()
-        .flat_map(|(i, sz)| {
-            let span = if i == app.settings.size_idx {
-                Span::styled(
-                    sz.label,
-                    Style::default()
-                        .fg(th_accent())
-                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                )
-            } else {
-                Span::styled(sz.label, Style::default().fg(th_pending()))
-            };
-            if i + 1 < lang.sizes.len() {
-                vec![span, Span::raw("  ")]
-            } else {
-                vec![span]
-            }
-        })
-        .collect();
+    let size_spans = label_row(
+        lang.sizes.iter().map(|sz| sz.label.to_string()),
+        app.settings.size_idx,
+    );
     f.render_widget(
         Paragraph::new(Line::from(size_spans)).alignment(Alignment::Center),
         size_a,

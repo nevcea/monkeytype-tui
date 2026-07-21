@@ -195,28 +195,40 @@ pub(super) fn toggle_span(label: &str, on: bool) -> Span<'static> {
     }
 }
 
+/// A row of selectable labels: the one at `selected` accented + bold +
+/// underlined, the rest dimmed, joined by two spaces. The menu's time/word
+/// presets, its word-pool size row, and its quote-filter row each carried an
+/// identical copy of this styling.
+pub(super) fn label_row(
+    labels: impl IntoIterator<Item = String>,
+    selected: usize,
+) -> Vec<Span<'static>> {
+    let mut spans = vec![];
+    for (i, label) in labels.into_iter().enumerate() {
+        if i > 0 {
+            spans.push(Span::raw("  "));
+        }
+        spans.push(if i == selected {
+            Span::styled(
+                label,
+                Style::default()
+                    .fg(th_accent())
+                    .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
+            )
+        } else {
+            Span::styled(label, Style::default().fg(th_pending()))
+        });
+    }
+    spans
+}
+
+/// [`label_row`] over values rendered as `{value}{suffix}`.
 pub(super) fn option_spans<T: std::fmt::Display>(
     opts: &[T],
     selected: usize,
     suffix: &str,
 ) -> Vec<Span<'static>> {
-    opts.iter()
-        .enumerate()
-        .flat_map(|(i, v)| {
-            let label = format!("{v}{suffix}");
-            let span = if i == selected {
-                Span::styled(
-                    label,
-                    Style::default()
-                        .fg(th_accent())
-                        .add_modifier(Modifier::BOLD | Modifier::UNDERLINED),
-                )
-            } else {
-                Span::styled(label, Style::default().fg(th_pending()))
-            };
-            vec![span, Span::raw("  ")]
-        })
-        .collect()
+    label_row(opts.iter().map(|v| format!("{v}{suffix}")), selected)
 }
 
 pub(super) fn custom_slot<'a>(selected: bool, suffix: &str, input: &Option<String>) -> Span<'a> {
@@ -254,6 +266,48 @@ pub(super) fn col<S: Into<String>>(s: S, w: usize, color: Color) -> Span<'static
         format!("{s}{}", " ".repeat(pad)),
         Style::default().fg(color),
     )
+}
+
+#[cfg(test)]
+mod helper_tests {
+    use super::*;
+
+    /// `label_row` is the one place the menu's "selected option" styling lives
+    /// now, so pin its contract: exactly one accented+underlined label, two
+    /// spaces between labels, and no trailing separator.
+    #[test]
+    fn label_row_accents_only_the_selected_label() {
+        let spans = label_row(["a", "b", "c"].map(String::from), 1);
+        assert_eq!(spans.len(), 5, "3 labels + 2 separators: {spans:?}");
+        assert_eq!(spans[1].content, "  ");
+        assert_eq!(spans[3].content, "  ");
+
+        assert_eq!(spans[2].content, "b");
+        assert_eq!(spans[2].style.fg, Some(th_accent()));
+        assert!(
+            spans[2]
+                .style
+                .add_modifier
+                .contains(Modifier::BOLD | Modifier::UNDERLINED)
+        );
+
+        for i in [0, 4] {
+            assert_eq!(spans[i].style.fg, Some(th_pending()));
+            assert!(!spans[i].style.add_modifier.contains(Modifier::UNDERLINED));
+        }
+    }
+
+    #[test]
+    fn option_spans_appends_the_suffix_to_every_value() {
+        let spans = option_spans(&[15u64, 30], 0, "s");
+        assert_eq!(spans[0].content, "15s");
+        assert_eq!(spans[2].content, "30s");
+    }
+
+    #[test]
+    fn label_row_with_no_labels_is_empty() {
+        assert!(label_row(std::iter::empty(), 0).is_empty());
+    }
 }
 
 #[cfg(test)]
