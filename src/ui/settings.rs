@@ -51,7 +51,11 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
         .collect();
 
     let height = (rows.len() + 5) as u16;
-    let inner = dialog_block(f, centered_block(f.area(), 40, height), None);
+    let inner = dialog_block(
+        f,
+        centered_block(f.area(), pct(f.area().width, 40), height),
+        None,
+    );
     let [title_a, _gap_a, items_a, _] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
@@ -163,8 +167,6 @@ pub(super) fn draw_settings(f: &mut Frame, app: &App) {
 mod tests {
     use super::*;
     use crate::app::App;
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
 
     fn row_index(row: SettingsRow) -> usize {
         SettingsRow::ORDER.iter().position(|&r| r == row).unwrap()
@@ -198,16 +200,7 @@ mod tests {
     }
 
     fn render_lines(app: &App) -> Vec<String> {
-        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-        terminal.draw(|f| draw_settings(f, app)).unwrap();
-        let buffer = terminal.backend().buffer();
-        (0..buffer.area.height)
-            .map(|y| {
-                (0..buffer.area.width)
-                    .map(|x| buffer[(x, y)].symbol())
-                    .collect::<String>()
-            })
-            .collect()
+        crate::ui::test_render::rows(80, 24, |f| draw_settings(f, app))
     }
 
     /// Regression test for 4ac7f07: when no audio device is available, the

@@ -77,7 +77,11 @@ pub fn draw(f: &mut Frame, app: &App) {
 }
 
 fn draw_confirm(f: &mut Frame, title: &str, is_yes: bool) {
-    let inner = dialog_block(f, centered_block(f.area(), 40, 5), None);
+    let inner = dialog_block(
+        f,
+        centered_block(f.area(), pct(f.area().width, 40), 5),
+        None,
+    );
     let sel = Style::default()
         .fg(th_accent())
         .add_modifier(Modifier::BOLD | Modifier::UNDERLINED);
@@ -133,17 +137,16 @@ pub(super) fn pin_footer(frame: Rect, height: u16) -> Rect {
     }
 }
 
-/// A rect `pct_x`% of the frame's width and exactly `height` rows tall,
-/// centred in `frame`.
+/// A `width`×`height` rect centred in `frame`, clamped to it.
 ///
-/// Prefer this over a percentage height whenever the content has a fixed row
-/// count. A percentage-height rect silently starves a fixed-height layout on
-/// short terminals — the solver collapses rows to zero height and the
-/// `let [..] = split[..] else` guards never fire, because the rect *count*
-/// still matches. Here the content always gets the rows it asks for, and only
-/// a terminal shorter than `height` clamps it.
-pub(super) fn centered_block(frame: Rect, pct_x: u16, height: u16) -> Rect {
-    let width = frame.width * pct_x / 100;
+/// Prefer this over a percentage-sized rect whenever the content has a fixed
+/// size. A percentage rect silently starves a fixed layout on small
+/// terminals: the solver collapses rows to zero height, and the
+/// `let [..] = split[..] else` guards never fire because the rect *count*
+/// still matches. Here the content gets the size it asks for unless the
+/// terminal itself is smaller.
+pub(super) fn centered_block(frame: Rect, width: u16, height: u16) -> Rect {
+    let width = width.min(frame.width);
     let height = height.min(frame.height);
     Rect {
         x: frame.x + frame.width.saturating_sub(width) / 2,
@@ -151,6 +154,12 @@ pub(super) fn centered_block(frame: Rect, pct_x: u16, height: u16) -> Rect {
         width,
         height,
     }
+}
+
+/// `percent`% of `total`, for blocks that scale with the frame. Pair it with
+/// `.max(..)` when the content has a width below which it clips.
+pub(super) fn pct(total: u16, percent: u16) -> u16 {
+    total * percent / 100
 }
 
 pub(super) fn centered_rect(pct_x: u16, pct_y: u16, r: Rect) -> Rect {
@@ -323,6 +332,34 @@ mod helper_tests {
     }
 }
 
+/// Render helpers shared by every `ui/*` test module. `ui/mod.rs`,
+/// `ui/menu.rs` and `ui/settings.rs` each carried their own copy of this
+/// buffer-to-string loop; they differed only in which `draw_*` they called
+/// and in the fixed 80×24 size, so both are parameters here.
+#[cfg(test)]
+pub(crate) mod test_render {
+    use ratatui::{Frame, Terminal, backend::TestBackend};
+
+    /// One `String` per terminal row.
+    pub(crate) fn rows(w: u16, h: u16, draw: impl FnOnce(&mut Frame)) -> Vec<String> {
+        let mut terminal = Terminal::new(TestBackend::new(w, h)).unwrap();
+        terminal.draw(draw).unwrap();
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
+    /// [`rows`] joined by newlines, for `contains` assertions over the screen.
+    pub(crate) fn text(w: u16, h: u16, draw: impl FnOnce(&mut Frame)) -> String {
+        rows(w, h, draw).join("\n")
+    }
+}
+
 #[cfg(test)]
 mod render_smoke_tests {
     use super::*;
@@ -350,17 +387,7 @@ mod render_smoke_tests {
     }
 
     fn rendered_text(app: &App) -> String {
-        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-        terminal.draw(|f| draw(f, app)).unwrap();
-        let buffer = terminal.backend().buffer();
-        (0..buffer.area.height)
-            .map(|y| {
-                (0..buffer.area.width)
-                    .map(|x| buffer[(x, y)].symbol())
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+        super::test_render::text(80, 24, |f| draw(f, app))
     }
 
     /// Both pickers share one scaffold (`draw_picker`), so this pins the parts

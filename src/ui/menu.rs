@@ -15,35 +15,31 @@ use crate::words::{LANGUAGES, lang_at};
 
 use super::*;
 
+/// Rows the vertical layout in [`draw_menu`] asks for. Declared next to that
+/// layout so the two can't drift apart.
+const MENU_HEIGHT: u16 = 10;
+
+/// Columns below which menu rows start clipping. The binding culprits are the
+/// mode tabs (`1·time·3600s    2·words    3·quote`) and the toggles row, which
+/// also carries the difficulty tag and the theme name. At `MIN_WIDTH` a plain
+/// 56% would be 33 columns — one short of the tab row alone.
+const MENU_MIN_WIDTH: u16 = 56;
+
 pub(super) fn draw_menu(f: &mut Frame, app: &App) {
-    let area = centered_rect(56, 30, f.area());
-    let [
-        title_a,
-        _,
-        tabs_a,
-        opts_a,
-        _,
-        lang_a,
-        size_a,
-        _,
-        toggles_a,
-        _,
-        _,
-    ] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(1),
+    let width = pct(f.area().width, 56).max(MENU_MIN_WIDTH);
+    let area = centered_block(f.area(), width, MENU_HEIGHT);
+    let [title_a, _, tabs_a, opts_a, _, lang_a, size_a, _, toggles_a] = Layout::vertical([
+        Constraint::Length(1), // title
+        Constraint::Length(1), // gap
         Constraint::Length(1), // mode tabs  1·time  2·words  3·quote
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Length(1),
-        Constraint::Min(0),
-        Constraint::Length(2),
+        Constraint::Length(2), // option row, plus the custom-input hint below it
+        Constraint::Length(1), // gap
+        Constraint::Length(1), // language
+        Constraint::Length(1), // word-pool size
+        Constraint::Length(1), // gap
+        Constraint::Length(1), // toggles
     ])
-    .split(area)[..]
-    else {
+    .split(area)[..] else {
         return;
     };
 
@@ -120,19 +116,20 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
         }
     };
 
-    let opts_display = if app.menu.custom_input.is_some() {
-        Paragraph::new(vec![
-            opts_line,
-            Line::from(Span::styled(
-                "type a number and press enter",
-                Style::default().fg(th_dim()),
-            )),
-        ])
-        .alignment(Alignment::Center)
+    // `opts_a` is two rows tall whether or not the custom slot is open, so the
+    // hint appearing doesn't shift every row beneath it.
+    let hint_line = if app.menu.custom_input.is_some() {
+        Line::from(Span::styled(
+            "type a number and press enter",
+            Style::default().fg(th_dim()),
+        ))
     } else {
-        Paragraph::new(opts_line).alignment(Alignment::Center)
+        Line::default()
     };
-    f.render_widget(opts_display, opts_a);
+    f.render_widget(
+        Paragraph::new(vec![opts_line, hint_line]).alignment(Alignment::Center),
+        opts_a,
+    );
 
     let lang = lang_at(app.settings.lang_idx);
     f.render_widget(
@@ -238,22 +235,74 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::app::App;
-    use ratatui::Terminal;
-    use ratatui::backend::TestBackend;
+    use crate::app::{App, MIN_HEIGHT, MIN_WIDTH};
+    use crate::ui::test_render::text;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
     fn rendered_text(app: &App) -> String {
-        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
-        terminal.draw(|f| draw_menu(f, app)).unwrap();
-        let buffer = terminal.backend().buffer();
-        (0..buffer.area.height)
-            .map(|y| {
-                (0..buffer.area.width)
-                    .map(|x| buffer[(x, y)].symbol())
-                    .collect::<String>()
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
+        text(80, 24, |f| draw_menu(f, app))
+    }
+
+    /// The menu block is sized from `MENU_HEIGHT` rather than a percentage of
+    /// the terminal, so every row survives at every height.
+    ///
+    /// With the old 30%-height rect the fixed `Length(1)` rows were
+    /// over-constrained and the solver zeroed some of them out. Which rows
+    /// were lost depended on how 30% rounded: at h=21/23/25 the mode-tab and
+    /// word-pool-size rows both vanished, while h=24 happened to absorb the
+    /// deficit in trailing padding and looked fine. Nothing errored — the
+    /// `let [..] else` guard can't catch it, because the rect count still
+    /// matches. Hence the sweep: a two-size check passes on the old code.
+    #[test]
+    fn every_menu_row_renders_at_every_height() {
+        let app = App::new();
+        for h in MIN_HEIGHT..=44 {
+            let screen = text(80, h, |f| draw_menu(f, &app));
+            for expected in [
+                "monkeytype",
+                "3·quote",
+                "language",
+                "default",
+                "punctuation",
+            ] {
+                assert!(
+                    screen.contains(expected),
+                    "row {expected:?} missing at 80x{h}:\n{screen}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_menu_row_renders_at_the_minimum_terminal_width() {
+        let app = App::new();
+        let screen = text(MIN_WIDTH, MIN_HEIGHT, |f| draw_menu(f, &app));
+        for expected in ["monkeytype", "3·quote", "language", "punctuation"] {
+            assert!(
+                screen.contains(expected),
+                "row {expected:?} missing at {MIN_WIDTH}x{MIN_HEIGHT}:\n{screen}"
+            );
+        }
+    }
+
+    /// The hint was the second line of a Paragraph rendered into a
+    /// `Length(1)` rect, so it was clipped and had never once been visible.
+    #[test]
+    fn custom_input_hint_is_visible_while_typing_a_custom_value() {
+        let mut app = App::new();
+        app.menu.time_idx = TIME_OPTIONS.len();
+        app.menu.mode = Mode::Time(app.menu.custom_time_val);
+        app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(
+            app.menu.custom_input.is_some(),
+            "custom input should be open"
+        );
+
+        let screen = rendered_text(&app);
+        assert!(
+            screen.contains("type a number and press enter"),
+            "custom-input hint missing:\n{screen}"
+        );
     }
 
     /// The quote-filter row renders `QuoteFilter::ALL`, the same order
