@@ -75,6 +75,43 @@ pub struct SettingsState {
     pub volume_input: Option<String>,
 }
 
+/// Put `cursor` at `to` and pull `scroll` so the cursor stays inside the
+/// `visible`-row window. Shared by both menu pickers and the History list.
+pub(super) fn focus_cursor(cursor: &mut usize, scroll: &mut usize, to: usize, visible: usize) {
+    *cursor = to;
+    if *cursor < *scroll {
+        *scroll = *cursor;
+    } else if *cursor >= *scroll + visible {
+        *scroll = *cursor + 1 - visible;
+    }
+}
+
+/// Move `cursor` by one (up if `!down`, down if `down`) within `[0, len)`,
+/// keeping it inside the `visible`-row scroll window. Returns whether the
+/// cursor actually moved, so callers can reset per-item state (e.g. the
+/// language picker's `size_idx`) only when it did.
+pub(super) fn step_picker_cursor(
+    cursor: &mut usize,
+    scroll: &mut usize,
+    len: usize,
+    visible: usize,
+    down: bool,
+) -> bool {
+    let to = if down {
+        if *cursor + 1 >= len {
+            return false;
+        }
+        *cursor + 1
+    } else {
+        if *cursor == 0 {
+            return false;
+        }
+        *cursor - 1
+    };
+    focus_cursor(cursor, scroll, to, visible);
+    true
+}
+
 pub fn filtered_languages(search: &str) -> Vec<(usize, &'static LangDef)> {
     // Lowercase the query once instead of per-language.
     let needle = search.to_lowercase();
@@ -174,6 +211,7 @@ pub struct App {
     pub last_height: u16,
     pub history: Vec<HistoryEntry>,
     pub history_scroll: usize,
+    pub history_cursor: usize,
     pub help_scroll: usize,
     pub should_quit: bool,
     pub settings_state: SettingsState,
@@ -218,6 +256,7 @@ impl App {
             last_height: 24,
             history: crate::history::load_history(),
             history_scroll: 0,
+            history_cursor: 0,
             help_scroll: 0,
             should_quit: false,
             settings_state: SettingsState {
@@ -584,16 +623,11 @@ mod input_flow_tests {
         assert!(!app.dialog.test_confirm);
     }
 
-    /// Scrolling must stop once the final entry is on screen, instead of
-    /// running to `len - 1` and leaving one row above a blank list.
-    #[test]
-    fn history_scroll_stops_when_the_last_entry_is_visible() {
+    fn history_app(entries: usize) -> App {
         let mut app = App::new();
         app.screen = Screen::History;
         app.last_height = 24;
-        let visible = app.history_visible_rows();
-        assert!(visible > 1, "layout math should leave room for rows");
-        app.history = (0..visible + 3)
+        app.history = (0..entries)
             .map(|_| HistoryEntry {
                 wpm: 0.0,
                 accuracy: 0.0,
@@ -602,10 +636,73 @@ mod input_flow_tests {
                 language: String::new(),
             })
             .collect();
+        app
+    }
+
+    /// Scrolling must stop once the final entry is on screen, instead of
+    /// running past it and leaving rows above a blank list.
+    #[test]
+    fn history_scroll_stops_when_the_last_entry_is_visible() {
+        let mut app = history_app(0);
+        let visible = app.history_visible_rows();
+        assert!(visible > 1, "layout math should leave room for rows");
+        app = history_app(visible + 3);
         for _ in 0..50 {
             app.on_key(key(KeyCode::Down));
         }
         assert_eq!(app.history_scroll, 3);
+        assert_eq!(app.history_cursor, app.history.len() - 1);
+    }
+
+    /// The list used to move a viewport offset with no selected row, so when
+    /// everything already fit on screen both arrow keys were dead: nothing
+    /// moved and nothing said why. With a selection they always move.
+    #[test]
+    fn history_arrows_move_the_selection_when_the_list_fits_on_screen() {
+        let mut app = history_app(3);
+        assert!(
+            app.history.len() < app.history_visible_rows(),
+            "this test is about a list shorter than the viewport"
+        );
+        assert_eq!(app.history_scroll, 0);
+
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.history_cursor, 1);
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.history_cursor, 2);
+        // Clamps at the last entry rather than running off the end.
+        app.on_key(key(KeyCode::Down));
+        assert_eq!(app.history_cursor, 2);
+        app.on_key(key(KeyCode::Up));
+        assert_eq!(app.history_cursor, 1);
+        // The viewport never moved, because it never needed to.
+        assert_eq!(app.history_scroll, 0);
+    }
+
+    #[test]
+    fn history_home_and_end_jump_to_the_ends() {
+        let mut app = history_app(40);
+        app.on_key(key(KeyCode::End));
+        assert_eq!(app.history_cursor, 39);
+        assert!(
+            app.history_scroll > 0,
+            "the viewport should follow the selection to the end"
+        );
+
+        app.on_key(key(KeyCode::Home));
+        assert_eq!(app.history_cursor, 0);
+        assert_eq!(app.history_scroll, 0);
+    }
+
+    /// An empty list must not panic or leave the cursor pointing at a row.
+    #[test]
+    fn history_keys_are_safe_with_no_entries() {
+        let mut app = history_app(0);
+        for code in [KeyCode::Down, KeyCode::End, KeyCode::PageDown, KeyCode::Up] {
+            app.on_key(key(code));
+        }
+        assert_eq!(app.history_cursor, 0);
+        assert_eq!(app.history_scroll, 0);
     }
 
     /// Stepping onto the custom slot and re-selecting the mode with `1`/`2`

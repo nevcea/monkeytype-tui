@@ -63,6 +63,8 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
 
     f.render_widget(
         Paragraph::new(Line::from(vec![
+            // Blank stand-in for the row marker, so the columns line up.
+            Span::raw("  "),
             col("wpm", 6, th_dim()),
             col("acc", 7, th_dim()),
             col("lang", 11, th_dim()),
@@ -81,11 +83,23 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
     } else {
         app.history
             .iter()
+            .enumerate()
             .skip(app.history_scroll)
             .take(max_rows)
-            .map(|e| {
+            .map(|(i, e)| {
+                // Same selection marker the pickers use, so "the highlighted
+                // row" looks the same everywhere in the app.
+                let selected = i == app.history_cursor;
                 Line::from(vec![
-                    col(format!("{:.0}", e.wpm), 6, th_accent()),
+                    Span::styled(
+                        if selected { "▶ " } else { "  " },
+                        Style::default().fg(th_accent()),
+                    ),
+                    col(
+                        format!("{:.0}", e.wpm),
+                        6,
+                        if selected { th_accent() } else { th_fg() },
+                    ),
                     col(format!("{:.1}%", e.accuracy), 7, th_fg()),
                     col(
                         if e.language.is_empty() {
@@ -104,23 +118,62 @@ pub(super) fn draw_history(f: &mut Frame, app: &App) {
     };
     f.render_widget(Paragraph::new(lines), entries_a);
 
-    let scroll_hint = if app.history.len() > max_rows {
-        format!("  {}/{}", app.history_scroll + 1, app.history.len())
-    } else {
+    // Position of the selection, not of the viewport — with a selected row the
+    // count only means something if it tracks what is highlighted.
+    let position = if app.history.is_empty() {
         String::new()
+    } else {
+        format!("  {}/{}", app.history_cursor + 1, app.history.len())
     };
 
     f.render_widget(
         Paragraph::new(Line::from(vec![
             kh("↑/↓"),
-            Span::raw(" scroll"),
+            Span::raw(" select"),
             sep(),
             kh("esc"),
             Span::raw(" back"),
-            Span::styled(scroll_hint, Style::default().fg(th_dim())),
+            Span::styled(position, Style::default().fg(th_dim())),
         ]))
         .style(Style::default().fg(th_dim()))
         .alignment(Alignment::Center),
         pin_footer(f.area(), 1),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::history::HistoryEntry;
+    use crate::ui::test_render::rows;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    /// The marker has to move on screen, not just in `App`: a list shorter
+    /// than the viewport used to produce no visible change at all for ↑/↓.
+    #[test]
+    fn the_selection_marker_moves_with_the_arrow_keys() {
+        let mut app = App::new();
+        app.screen = crate::app::Screen::History;
+        app.last_height = 24;
+        app.history = (0..3)
+            .map(|i| HistoryEntry {
+                wpm: 60.0 + i as f64,
+                accuracy: 95.0,
+                mode: "words 25".into(),
+                timestamp: 0,
+                language: "english".into(),
+            })
+            .collect();
+
+        let marked = |app: &App| {
+            rows(80, 24, |f| draw_history(f, app))
+                .into_iter()
+                .position(|r| r.contains('▶'))
+        };
+
+        let first = marked(&app).expect("a row should be marked");
+        app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        let second = marked(&app).expect("a row should still be marked");
+        assert_eq!(second, first + 1, "the marker should have moved down a row");
+    }
 }

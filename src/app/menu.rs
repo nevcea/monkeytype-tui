@@ -5,7 +5,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 
 use super::{
     App, LANG_PICKER_VISIBLE, LangPicker, MenuState, Screen, THEME_PICKER_VISIBLE, TIME_OPTIONS,
-    ThemePicker, WORD_OPTIONS, filtered_languages, filtered_themes,
+    ThemePicker, WORD_OPTIONS, filtered_languages, filtered_themes, step_picker_cursor,
 };
 use crate::game::Mode;
 use crate::words::load_quotes_for;
@@ -14,37 +14,6 @@ const CUSTOM_INPUT_MAX_LEN: usize = 5;
 /// Clamps for custom time (seconds) and word-count input.
 const CUSTOM_TIME_MAX: u64 = 3600;
 const CUSTOM_WORDS_MAX: usize = 5000;
-
-/// Move a picker's `cursor` by one (up if `!down`, down if `down`) within
-/// `[0, len)`, keeping it inside the `visible`-row scroll window. Returns
-/// whether the cursor actually moved, so callers can reset per-item state
-/// (e.g. the language picker's `size_idx`) only when it did.
-fn step_picker_cursor(
-    cursor: &mut usize,
-    scroll: &mut usize,
-    len: usize,
-    visible: usize,
-    down: bool,
-) -> bool {
-    if down {
-        if *cursor + 1 >= len {
-            return false;
-        }
-        *cursor += 1;
-        if *cursor >= *scroll + visible {
-            *scroll = *cursor + 1 - visible;
-        }
-    } else {
-        if *cursor == 0 {
-            return false;
-        }
-        *cursor -= 1;
-        if *cursor < *scroll {
-            *scroll = *cursor;
-        }
-    }
-    true
-}
 
 /// Step an option index forward (clamped to the custom slot at `len`) or
 /// backward (saturating at 0).

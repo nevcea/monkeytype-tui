@@ -55,6 +55,15 @@ const HELP_SECTIONS: &[(&str, &[(&str, &str)])] = &[
         ],
     ),
     (
+        "history",
+        &[
+            ("↑ / ↓", "move selection"),
+            ("pgup / pgdn", "move by a page"),
+            ("home / end", "first / last result"),
+            ("esc", "back to menu"),
+        ],
+    ),
+    (
         "language picker",
         &[
             ("↑ / ↓", "navigate languages"),
