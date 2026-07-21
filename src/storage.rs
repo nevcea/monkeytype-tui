@@ -7,6 +7,17 @@ use std::path::{Path, PathBuf};
 /// to `$HOME/.local/share` on unix or `%APPDATA%` on Windows. Returns `None`
 /// when no base directory can be determined (persistence is then skipped).
 pub fn data_dir() -> Option<PathBuf> {
+    // Unit tests build `App`, and nearly every state change it models calls
+    // `persist()`. Pointed at the real data dir they read and then overwrite
+    // the user's own config, history and personal bests — a `cargo test` run
+    // reset saved preferences, and values written by one test leaked into the
+    // next run. Redirect the suite to a scratch dir, keyed by pid so runs
+    // start clean and concurrent runs don't collide.
+    if cfg!(test) {
+        return Some(
+            std::env::temp_dir().join(format!("monkeytype-tui-test-{}", std::process::id())),
+        );
+    }
     if let Some(xdg) = std::env::var_os("XDG_DATA_HOME").filter(|s| !s.is_empty()) {
         return Some(PathBuf::from(xdg).join("monkeytype-tui"));
     }
