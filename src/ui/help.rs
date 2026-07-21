@@ -16,8 +16,107 @@ use crate::words::LANGUAGES;
 
 use super::*;
 
-pub(super) fn draw_help(f: &mut Frame) {
-    let area = centered_rect(54, 90, f.area());
+/// The keybinding reference, as data rather than pre-built `Line`s: the
+/// scroll clamp needs the body's line count, and `app` can't build styled
+/// lines (it has no access to the theme).
+const HELP_SECTIONS: &[(&str, &[(&str, &str)])] = &[
+    (
+        "menu",
+        &[
+            ("1 / 2 / 3", "select mode  (time · words · quote)"),
+            ("← / →", "change option value"),
+            ("enter", "start test  (or open custom input)"),
+            ("l", "open language picker"),
+            ("t", "open theme picker"),
+            ("p", "toggle punctuation"),
+            ("n", "toggle numbers"),
+            ("s", "settings  (sound, volume, …)"),
+            ("h", "history"),
+            ("?", "this help"),
+            ("q  /  ctrl+c", "quit"),
+        ],
+    ),
+    (
+        "test",
+        &[
+            ("tab", "restart test (new words)"),
+            ("esc", "back to menu"),
+            ("backspace", "delete last character"),
+            ("ctrl+backspace", "delete whole word"),
+        ],
+    ),
+    (
+        "result",
+        &[
+            ("r", "repeat same words"),
+            ("enter / tab", "new test (new words)"),
+            ("esc", "back to menu"),
+        ],
+    ),
+    (
+        "language picker",
+        &[
+            ("↑ / ↓", "navigate languages"),
+            ("← / →", "change word pool size"),
+            ("enter", "confirm selection"),
+            ("esc", "cancel"),
+        ],
+    ),
+    (
+        "theme picker",
+        &[
+            ("↑ / ↓", "preview themes live"),
+            ("type", "search by name"),
+            ("enter", "keep theme"),
+            ("esc", "cancel  (restore previous)"),
+        ],
+    ),
+];
+
+/// Lines [`help_body`] produces. `App` clamps its scroll against this, so it
+/// must stay derived from `HELP_SECTIONS` rather than hand-counted.
+pub fn line_count() -> usize {
+    let rows: usize = HELP_SECTIONS.iter().map(|(_, rows)| rows.len() + 1).sum();
+    // One blank separator between consecutive sections.
+    rows + HELP_SECTIONS.len().saturating_sub(1)
+}
+
+/// `── menu ─────…` filled to `width`. The rules used to be hardcoded
+/// 46-column runs, which clipped in the ~43-column panel.
+fn section_rule(title: &str, width: u16) -> Line<'static> {
+    let head = format!("── {title} ");
+    let fill = (width as usize).saturating_sub(head.chars().count());
+    Line::from(Span::styled(
+        format!("{head}{}", "─".repeat(fill)),
+        Style::default().fg(th_dim()).add_modifier(Modifier::BOLD),
+    ))
+}
+
+fn help_body(width: u16) -> Vec<Line<'static>> {
+    let mut lines = Vec::with_capacity(line_count());
+    for (i, (title, rows)) in HELP_SECTIONS.iter().enumerate() {
+        if i > 0 {
+            lines.push(Line::default());
+        }
+        lines.push(section_rule(title, width));
+        for (k, d) in *rows {
+            lines.push(Line::from(vec![
+                Span::styled(format!("{k:<16}"), Style::default().fg(th_accent())),
+                Span::styled(*d, Style::default().fg(th_fg())),
+            ]));
+        }
+    }
+    lines
+}
+
+/// Columns the widest help row needs: the 16-column key gutter plus the
+/// longest description ("select mode  (time · words · quote)", 35). Below
+/// this the descriptions clip — 54% of an 80-column terminal is only 43.
+const HELP_MIN_WIDTH: u16 = 52;
+
+pub(super) fn draw_help(f: &mut Frame, app: &App) {
+    let width = pct(f.area().width, 54).max(HELP_MIN_WIDTH);
+    let area = centered_block(f.area(), width, pct(f.area().height, 90));
     let [title_a, _, body_a, _] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
@@ -39,59 +138,31 @@ pub(super) fn draw_help(f: &mut Frame) {
         title_a,
     );
 
-    let kw = |k: &'static str| Span::styled(format!("{k:<16}"), Style::default().fg(th_accent()));
-    let dsc = |d: &'static str| Span::styled(d, Style::default().fg(th_fg()));
-    let sec = |s: &'static str| {
-        Line::from(Span::styled(
-            s,
-            Style::default().fg(th_dim()).add_modifier(Modifier::BOLD),
-        ))
-    };
-    let row = |k, d| Line::from(vec![kw(k), dsc(d)]);
+    // Clamp against the rect actually granted, not `App`'s approximation of
+    // it — the two disagree by a row or two after a resize.
+    let total = line_count();
+    let visible = body_a.height as usize;
+    let scroll = app.help_scroll.min(total.saturating_sub(visible));
 
     f.render_widget(
-        Paragraph::new(vec![
-            sec("── menu ──────────────────────────────────────"),
-            row("1 / 2 / 3", "select mode  (time · words · quote)"),
-            row("← / →", "change option value"),
-            row("enter", "start test  (or open custom input)"),
-            row("l", "open language picker"),
-            row("t", "open theme picker"),
-            row("p", "toggle punctuation"),
-            row("n", "toggle numbers"),
-            row("s", "settings  (sound, volume, …)"),
-            row("h", "history"),
-            row("? ", "this help"),
-            row("q  /  ctrl+c", "quit"),
-            Line::from(""),
-            sec("── test ────────────────────────────────────────"),
-            row("tab", "restart test (new words)"),
-            row("esc", "back to menu"),
-            row("backspace", "delete last character"),
-            row("ctrl+backspace", "delete whole word"),
-            Line::from(""),
-            sec("── result ──────────────────────────────────────"),
-            row("r", "repeat same words"),
-            row("enter / tab", "new test (new words)"),
-            row("esc", "back to menu"),
-            Line::from(""),
-            sec("── language picker ─────────────────────────────"),
-            row("↑ / ↓", "navigate languages"),
-            row("← / →", "change word pool size"),
-            row("enter", "confirm selection"),
-            row("esc", "cancel"),
-            Line::from(""),
-            sec("── theme picker ────────────────────────────────"),
-            row("↑ / ↓", "preview themes live"),
-            row("type", "search by name"),
-            row("enter", "keep theme"),
-            row("esc", "cancel  (restore previous)"),
-        ]),
+        Paragraph::new(help_body(body_a.width)).scroll((scroll as u16, 0)),
         body_a,
     );
 
+    let mut hints = vec![kh("esc"), Span::raw(" back")];
+    if total > visible {
+        hints.extend([
+            sep(),
+            kh("↑/↓"),
+            Span::raw(" scroll"),
+            Span::styled(
+                format!("   {}/{}", scroll + visible.min(total), total),
+                Style::default().fg(th_dim()),
+            ),
+        ]);
+    }
     f.render_widget(
-        Paragraph::new(Line::from(vec![kh("esc"), Span::raw(" back")]))
+        Paragraph::new(Line::from(hints))
             .style(Style::default().fg(th_dim()))
             .alignment(Alignment::Center),
         pin_footer(f.area(), 1),
@@ -292,4 +363,82 @@ pub(super) fn draw_theme_picker(f: &mut Frame, app: &App) {
             Line::from(spans)
         },
     );
+}
+
+#[cfg(test)]
+mod help_tests {
+    use super::*;
+    use crate::app::{MIN_HEIGHT, MIN_WIDTH, Screen};
+    use crate::ui::test_render::text;
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+    fn help_app() -> App {
+        let mut app = App::new();
+        app.screen = Screen::Help;
+        app.last_width = 80;
+        app.last_height = 24;
+        app
+    }
+
+    /// The body is 35 lines but only ~19 rows fit at 80x24, and `Paragraph`
+    /// clips without complaint. With no scroll key, everything from the
+    /// `result` section down — including both picker sections — was
+    /// unreachable. Every section title must now be reachable.
+    #[test]
+    fn every_help_section_is_reachable_at_80x24() {
+        let mut app = help_app();
+        let top = text(80, 24, |f| draw_help(f, &app));
+        assert!(top.contains("── menu"), "top of help missing:\n{top}");
+
+        app.on_key(KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        let bottom = text(80, 24, |f| draw_help(f, &app));
+        for expected in ["── theme picker", "restore previous"] {
+            assert!(
+                bottom.contains(expected),
+                "{expected:?} unreachable at the bottom of help:\n{bottom}"
+            );
+        }
+    }
+
+    /// The scroll must stop with the last line on screen rather than running
+    /// off into blank rows, and must never go negative.
+    #[test]
+    fn help_scroll_is_clamped_at_both_ends() {
+        let mut app = help_app();
+        for _ in 0..200 {
+            app.on_key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE));
+        }
+        assert_eq!(app.help_scroll, app.help_max_scroll());
+        assert!(
+            app.help_max_scroll() > 0,
+            "help should need scrolling at 24 rows"
+        );
+
+        for _ in 0..200 {
+            app.on_key(KeyEvent::new(KeyCode::Up, KeyModifiers::NONE));
+        }
+        assert_eq!(app.help_scroll, 0);
+    }
+
+    /// `line_count` drives `App`'s scroll clamp, so it must stay derived from
+    /// `HELP_SECTIONS` rather than drifting from what `help_body` renders.
+    #[test]
+    fn line_count_matches_the_rendered_body() {
+        assert_eq!(line_count(), help_body(40).len());
+    }
+
+    /// The panel is floored at `HELP_MIN_WIDTH` because 54% of an 80-column
+    /// terminal is 43 — too narrow for the 16-column key gutter plus the
+    /// longest description, which used to be cut off mid-word.
+    #[test]
+    fn the_longest_description_is_not_clipped() {
+        let app = help_app();
+        for (w, h) in [(80, 24), (MIN_WIDTH, MIN_HEIGHT)] {
+            let screen = text(w, h, |f| draw_help(f, &app));
+            assert!(
+                screen.contains("select mode  (time · words · quote)"),
+                "description clipped at {w}x{h}:\n{screen}"
+            );
+        }
+    }
 }

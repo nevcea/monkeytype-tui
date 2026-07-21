@@ -20,6 +20,7 @@ mod settings;
 mod test_screen;
 mod theme;
 
+pub use help::line_count as help_line_count;
 use theme::*;
 pub use theme::{Theme, all_themes, theme_by_name};
 
@@ -58,7 +59,7 @@ pub fn draw(f: &mut Frame, app: &App) {
         crate::app::Screen::Test => test_screen::draw_test(f, app),
         crate::app::Screen::Result => result::draw_result(f, app),
         crate::app::Screen::History => history::draw_history(f, app),
-        crate::app::Screen::Help => help::draw_help(f),
+        crate::app::Screen::Help => help::draw_help(f, app),
         crate::app::Screen::Settings => settings::draw_settings(f, app),
     }
 

@@ -174,6 +174,7 @@ pub struct App {
     pub last_height: u16,
     pub history: Vec<HistoryEntry>,
     pub history_scroll: usize,
+    pub help_scroll: usize,
     pub should_quit: bool,
     pub settings_state: SettingsState,
     pub sound: Option<SoundPlayer>,
@@ -217,6 +218,7 @@ impl App {
             last_height: 24,
             history: crate::history::load_history(),
             history_scroll: 0,
+            help_scroll: 0,
             should_quit: false,
             settings_state: SettingsState {
                 cursor: 0,
@@ -408,6 +410,23 @@ impl App {
     pub fn history_visible_rows(&self) -> usize {
         const CHROME_ROWS: usize = 6;
         (self.last_height as usize * 80 / 100).saturating_sub(CHROME_ROWS)
+    }
+
+    /// Rows the Help body shows at once, mirroring `ui::help`'s layout (a
+    /// 90%-height `centered_rect` minus title, gap and footer) the same way
+    /// [`Self::history_visible_rows`] mirrors the History overlay. Only used
+    /// to clamp the scroll, so rounding drift is harmless — `ui::help` clamps
+    /// again against the rect it actually got.
+    pub fn help_visible_rows(&self) -> usize {
+        const CHROME_ROWS: usize = 3;
+        (self.last_height as usize * 90 / 100)
+            .saturating_sub(CHROME_ROWS)
+            .max(1)
+    }
+
+    /// How far the Help body can scroll before its last line is on screen.
+    pub fn help_max_scroll(&self) -> usize {
+        crate::ui::help_line_count().saturating_sub(self.help_visible_rows())
     }
 
     // ── scroll ───────────────────────────────────────────────────────────────
