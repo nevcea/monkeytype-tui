@@ -11,7 +11,7 @@ use ratatui::{
 
 use crate::app::App;
 use crate::game::CharState;
-use crate::words::LANGUAGES;
+use crate::words::lang_name;
 
 use super::*;
 
@@ -47,9 +47,7 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
     let raw = app.game.raw_wpm();
     let acc = app.game.accuracy();
     let mode_str = app.game.mode.to_string();
-    let lang = LANGUAGES
-        .get(app.game.settings.lang_idx)
-        .map_or("unknown", |l| l.name);
+    let lang = lang_name(app.game.settings.lang_idx);
 
     let [lwpm_a, lacc_a, _, ltype_a, _, lraw_a, src_a] = Layout::vertical([
         Constraint::Length(2),

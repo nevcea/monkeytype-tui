@@ -11,7 +11,7 @@ use crate::game::{GameState, Mode, Settings};
 use crate::history::HistoryEntry;
 use crate::pb::{self, PersonalBests};
 use crate::sound::{SoundPack, SoundPlayer};
-use crate::words::{LANGUAGES, LangDef, load_quotes_for};
+use crate::words::{LANGUAGES, LangDef, lang_name, load_quotes_for};
 
 mod help;
 mod history;
@@ -127,9 +127,10 @@ impl ThemePicker {
 
 impl LangPicker {
     fn new(lang_idx: usize, size_idx: usize) -> Self {
-        let max_size = LANGUAGES
-            .get(lang_idx)
-            .map_or(0, |l| l.sizes.len().saturating_sub(1));
+        let max_size = crate::words::lang_at(lang_idx)
+            .sizes
+            .len()
+            .saturating_sub(1);
         Self {
             cursor: lang_idx,
             size_idx: size_idx.min(max_size),
@@ -188,10 +189,7 @@ impl App {
         let cfg = crate::config::load_config();
         let settings = cfg.settings;
         // Load quotes for the persisted language so quote mode works immediately.
-        let lang = LANGUAGES
-            .get(settings.lang_idx)
-            .map_or("english", |l| l.name);
-        let quotes = load_quotes_for(lang);
+        let quotes = load_quotes_for(lang_name(settings.lang_idx));
         let game = GameState::new(cfg.mode, settings.clone(), quotes);
         // Apply persisted sound preferences on top of the default player.
         let sound = SoundPlayer::new().map(|mut s| {
@@ -366,10 +364,7 @@ impl App {
         let wpm = self.game.wpm();
         let acc = self.game.accuracy();
         let mode_str = self.game.mode.to_string();
-        let lang = LANGUAGES
-            .get(self.settings.lang_idx)
-            .map_or("english", |l| l.name)
-            .to_string();
+        let lang = lang_name(self.settings.lang_idx).to_string();
         let key = format!("{mode_str}_{lang}");
         self.is_new_pb = pb::update_pb(&mut self.pb, key, wpm, acc);
         if self.is_new_pb {

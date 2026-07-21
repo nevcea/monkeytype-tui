@@ -11,7 +11,7 @@ use ratatui::{
 
 use crate::app::{App, word_lines};
 use crate::game::{CharState, CursorShape, GameState, Mode};
-use crate::words::LANGUAGES;
+use crate::words::lang_name;
 
 use super::*;
 
@@ -165,9 +165,7 @@ pub(super) fn draw_test(f: &mut Frame, app: &App) {
             Mode::Words(n) => format!("words  {n}"),
             Mode::Quote => "quote".to_string(),
         };
-        let lang = LANGUAGES
-            .get(app.settings.lang_idx)
-            .map_or("english", |l| l.name);
+        let lang = lang_name(app.settings.lang_idx);
         f.render_widget(
             Paragraph::new(Line::from(vec![
                 Span::styled(mode_label, Style::default().fg(th_dim())),

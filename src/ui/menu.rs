@@ -11,7 +11,7 @@ use ratatui::{
 
 use crate::app::{App, TIME_OPTIONS, WORD_OPTIONS};
 use crate::game::{Difficulty, Mode, QuoteFilter};
-use crate::words::LANGUAGES;
+use crate::words::{LANGUAGES, lang_at};
 
 use super::*;
 
@@ -99,10 +99,7 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
             Line::from(spans)
         }
         Mode::Quote => {
-            let has_quotes = LANGUAGES
-                .get(app.settings.lang_idx)
-                .and_then(|l| l.quotes)
-                .is_some();
+            let has_quotes = lang_at(app.settings.lang_idx).quotes.is_some();
             if has_quotes {
                 let f = app.settings.quote_filter;
                 let filters = [
@@ -156,9 +153,7 @@ pub(super) fn draw_menu(f: &mut Frame, app: &App) {
     };
     f.render_widget(opts_display, opts_a);
 
-    let lang = LANGUAGES
-        .get(app.settings.lang_idx)
-        .unwrap_or(&LANGUAGES[0]);
+    let lang = lang_at(app.settings.lang_idx);
     f.render_widget(
         Paragraph::new(Line::from(vec![
             Span::styled("language  ", Style::default().fg(th_dim())),

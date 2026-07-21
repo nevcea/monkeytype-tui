@@ -94,6 +94,20 @@ pub static LANGUAGES: &[LangDef] = &[
     lang!("welsh", ["1k"]),
 ];
 
+/// The language at `lang_idx`, falling back to the first entry when the index
+/// no longer resolves (e.g. a persisted `lang_idx` from a build with more
+/// languages). Single source of that fallback: call sites previously each
+/// picked their own (`"english"`, `"unknown"`, `LANGUAGES[0]`), so one stale
+/// index rendered a different name on every screen.
+pub fn lang_at(lang_idx: usize) -> &'static LangDef {
+    LANGUAGES.get(lang_idx).unwrap_or(&LANGUAGES[0])
+}
+
+/// Display name of the language at `lang_idx`; see [`lang_at`] for the fallback.
+pub fn lang_name(lang_idx: usize) -> &'static str {
+    lang_at(lang_idx).name
+}
+
 type WordCache = HashMap<(usize, usize), Arc<Vec<String>>>;
 
 /// Parsed word lists cached by (lang_idx, size_idx) so restarting a test never
@@ -111,7 +125,7 @@ pub fn load_words(lang_idx: usize, size_idx: usize) -> Arc<Vec<String>> {
     {
         return Arc::clone(words);
     }
-    let lang = LANGUAGES.get(lang_idx).unwrap_or(&LANGUAGES[0]);
+    let lang = lang_at(lang_idx);
     let size = lang.sizes.get(size_idx).unwrap_or(&lang.sizes[0]);
     // Degrade gracefully rather than panic if an embedded file is malformed;
     // `tests::all_word_lists_parse` guards against this at build/test time.
@@ -162,6 +176,16 @@ pub fn load_quotes_for(lang: &str) -> Vec<QuoteEntry> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every screen resolves a language through `lang_at`, so an out-of-range
+    /// persisted `lang_idx` must land on one shared fallback instead of each
+    /// call site inventing its own placeholder name.
+    #[test]
+    fn lang_at_falls_back_to_the_first_entry_for_an_unknown_index() {
+        assert_eq!(lang_at(0).name, LANGUAGES[0].name);
+        assert_eq!(lang_at(usize::MAX).name, LANGUAGES[0].name);
+        assert_eq!(lang_name(usize::MAX), LANGUAGES[0].name);
+    }
 
     #[test]
     fn all_word_lists_parse() {
