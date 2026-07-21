@@ -10,7 +10,7 @@ use ratatui::{
 };
 
 use crate::app::App;
-use crate::game::CharState;
+use crate::game::{CharState, Difficulty};
 use crate::words::lang_name;
 
 use super::*;
@@ -41,12 +41,39 @@ pub(super) fn draw_result(f: &mut Frame, app: &App) {
     draw_footer(f, pin_footer(f.area(), 1));
 }
 
+/// A labelled result figure: a dim caption, the headline value, then any
+/// supporting lines. The result screen stacks seven of these, and each one
+/// used to repeat this same caption-over-value construction inline.
+fn stat_block<'a>(
+    label: &'static str,
+    value: Line<'a>,
+    extra: Vec<Line<'a>>,
+    align: Alignment,
+) -> Paragraph<'a> {
+    let mut lines = vec![Line::from(Span::styled(
+        label,
+        Style::default().fg(th_dim()),
+    ))];
+    lines.push(value);
+    lines.extend(extra);
+    Paragraph::new(lines).alignment(align)
+}
+
+/// The bold headline line a stat block leads with.
+fn value_line(text: String, color: Color) -> Line<'static> {
+    Line::from(Span::styled(
+        text,
+        Style::default().fg(color).add_modifier(Modifier::BOLD),
+    ))
+}
+
+/// A plain (non-bold) supporting line under a stat block's value.
+fn note_line(text: String, color: Color) -> Line<'static> {
+    Line::from(Span::styled(text, Style::default().fg(color)))
+}
+
 fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
     let failed = app.game.is_failed();
-    let wpm = app.game.wpm();
-    let raw = app.game.raw_wpm();
-    let acc = app.game.accuracy();
-    let mode_str = app.game.mode.to_string();
     let lang = lang_name(app.game.settings.lang_idx);
 
     let [lwpm_a, lacc_a, _, ltype_a, _, lraw_a, src_a] = Layout::vertical([
@@ -62,73 +89,61 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
         return;
     };
 
-    let wpm_color = if failed { th_wrong() } else { th_accent() };
-    let wpm_line = if app.is_new_pb && !failed {
+    // A failed test scores zero; an otherwise-clean personal best gets a star.
+    let score_color = if failed { th_wrong() } else { th_accent() };
+    let wpm_line = if failed {
+        value_line("0".to_string(), score_color)
+    } else if app.is_new_pb {
         Line::from(vec![
             Span::styled(
-                format!("{wpm:.0}"),
-                Style::default().fg(wpm_color).add_modifier(Modifier::BOLD),
+                format!("{:.0}", app.game.wpm()),
+                Style::default()
+                    .fg(score_color)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(" ★", Style::default().fg(th_accent())),
         ])
     } else {
-        Line::from(Span::styled(
-            if failed {
-                "0".to_string()
-            } else {
-                format!("{wpm:.0}")
-            },
-            Style::default().fg(wpm_color).add_modifier(Modifier::BOLD),
-        ))
+        value_line(format!("{:.0}", app.game.wpm()), score_color)
     };
+    f.render_widget(stat_block("wpm", wpm_line, vec![], Alignment::Left), lwpm_a);
     f.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled("wpm", Style::default().fg(th_dim()))),
-            wpm_line,
-        ]),
-        lwpm_a,
-    );
-    f.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled("acc", Style::default().fg(th_dim()))),
-            Line::from(Span::styled(
-                format!("{acc:.1}%"),
-                Style::default()
-                    .fg(if failed { th_wrong() } else { th_accent() })
-                    .add_modifier(Modifier::BOLD),
-            )),
-        ]),
+        stat_block(
+            "acc",
+            value_line(format!("{:.1}%", app.game.accuracy()), score_color),
+            vec![],
+            Alignment::Left,
+        ),
         lacc_a,
     );
+
+    let mut type_extra = vec![note_line(lang.to_string(), th_accent())];
     let diff = app.game.settings.difficulty;
-    let mut type_lines = vec![
-        Line::from(Span::styled("test type", Style::default().fg(th_dim()))),
-        Line::from(Span::styled(mode_str, Style::default().fg(th_accent()))),
-        Line::from(Span::styled(lang, Style::default().fg(th_accent()))),
-    ];
-    if diff != crate::game::Difficulty::Normal {
-        type_lines.push(Line::from(Span::styled(
-            diff.label(),
-            Style::default().fg(th_accent()),
-        )));
+    if diff != Difficulty::Normal {
+        type_extra.push(note_line(diff.label().to_string(), th_accent()));
     }
     if let Some(reason) = app.game.fail_reason() {
-        type_lines.push(Line::from(Span::styled(
-            format!("invalid ({reason})"),
-            Style::default().fg(th_wrong()),
-        )));
+        type_extra.push(note_line(format!("invalid ({reason})"), th_wrong()));
     }
-    f.render_widget(Paragraph::new(type_lines), ltype_a);
     f.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled("raw", Style::default().fg(th_dim()))),
-            Line::from(Span::styled(
-                format!("{raw:.0}"),
-                Style::default().fg(th_fg()).add_modifier(Modifier::BOLD),
-            )),
-        ]),
+        stat_block(
+            "test type",
+            note_line(app.game.mode.to_string(), th_accent()),
+            type_extra,
+            Alignment::Left,
+        ),
+        ltype_a,
+    );
+    f.render_widget(
+        stat_block(
+            "raw",
+            value_line(format!("{:.0}", app.game.raw_wpm()), th_fg()),
+            vec![],
+            Alignment::Left,
+        ),
         lraw_a,
     );
+
     if let Some(src) = &app.game.quote_source {
         f.render_widget(
             Paragraph::new(Span::styled(
@@ -170,64 +185,48 @@ fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {
     };
 
     f.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled("characters", Style::default().fg(th_dim()))),
-            Line::from(Span::styled(
-                format!("{correct}/{wrong}"),
-                Style::default()
-                    .fg(th_accent())
-                    .add_modifier(Modifier::BOLD),
-            )),
-        ])
-        .alignment(Alignment::Right),
+        stat_block(
+            "characters",
+            value_line(format!("{correct}/{wrong}"), th_accent()),
+            vec![],
+            Alignment::Right,
+        ),
         rchars_a,
     );
     f.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled("consistency", Style::default().fg(th_dim()))),
-            Line::from(Span::styled(
-                format!("{cons:.0}%"),
-                Style::default()
-                    .fg(th_accent())
-                    .add_modifier(Modifier::BOLD),
-            )),
-        ])
-        .alignment(Alignment::Right),
+        stat_block(
+            "consistency",
+            value_line(format!("{cons:.0}%"), th_accent()),
+            vec![],
+            Alignment::Right,
+        ),
         rcons_a,
     );
+
     let session_secs = app.result_session_secs;
-    let afk = app.game.afk_secs;
+    let afk_pct = if elapsed > 0.0 {
+        (app.game.afk_secs / elapsed * 100.0).min(100.0)
+    } else {
+        0.0
+    };
     f.render_widget(
-        Paragraph::new(vec![
-            Line::from(Span::styled("time", Style::default().fg(th_dim()))),
-            Line::from(Span::styled(
-                format!("{elapsed:.1}s"),
-                Style::default()
-                    .fg(th_accent())
-                    .add_modifier(Modifier::BOLD),
-            )),
-            Line::from(Span::styled(
-                format!(
-                    "{:02}:{:02}:{:02} session",
-                    session_secs / 3600,
-                    session_secs % 3600 / 60,
-                    session_secs % 60
+        stat_block(
+            "time",
+            value_line(format!("{elapsed:.1}s"), th_accent()),
+            vec![
+                note_line(
+                    format!(
+                        "{:02}:{:02}:{:02} session",
+                        session_secs / 3600,
+                        session_secs % 3600 / 60,
+                        session_secs % 60
+                    ),
+                    th_dim(),
                 ),
-                Style::default().fg(th_dim()),
-            )),
-            Line::from(Span::styled(
-                format!(
-                    "{:.0}% afk",
-                    if elapsed > 0.0 {
-                        (afk / elapsed * 100.0).min(100.0)
-                    } else {
-                        0.0
-                    }
-                ),
-                Style::default().fg(th_dim()),
-            )),
-        ])
-        .alignment(Alignment::Right),
+                note_line(format!("{afk_pct:.0}% afk"), th_dim()),
+            ],
+            Alignment::Right,
+        ),
         rtime_a,
     );
 }
