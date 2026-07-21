@@ -6,7 +6,7 @@ use ratatui::{
     style::{Modifier, Style},
     symbols,
     text::{Line, Span},
-    widgets::{Axis, Chart, Dataset, GraphType, Paragraph},
+    widgets::{Axis, Chart, Dataset, GraphType, Paragraph, Wrap},
 };
 
 use crate::app::App;
@@ -17,7 +17,7 @@ use super::*;
 
 pub(super) fn draw_result(f: &mut Frame, app: &App) {
     let area = centered_rect(90, 70, f.area());
-    let [main_a, _, _] = Layout::vertical([
+    let [main_a, src_a, _] = Layout::vertical([
         Constraint::Min(1),
         Constraint::Length(1),
         Constraint::Length(1),
@@ -38,7 +38,28 @@ pub(super) fn draw_result(f: &mut Frame, app: &App) {
     draw_left_panel(f, left_a, app);
     draw_right_panel(f, right_a, app);
     draw_chart(f, chart_a, app);
+    draw_quote_source(f, src_a, app);
     draw_footer(f, pin_footer(f.area(), 1));
+}
+
+/// The attribution belongs to the whole test, and at 26% of the screen the
+/// left panel gave it 18 columns — "— Frank Herbert, Dune" came out as
+/// "— Frank Herbert,". It spans the full result width here instead.
+fn draw_quote_source(f: &mut Frame, area: Rect, app: &App) {
+    let Some(src) = &app.game.quote_source else {
+        return;
+    };
+    f.render_widget(
+        Paragraph::new(Span::styled(
+            format!("— {src}"),
+            Style::default()
+                .fg(th_pending())
+                .add_modifier(Modifier::ITALIC),
+        ))
+        .wrap(Wrap { trim: true })
+        .alignment(Alignment::Center),
+        area,
+    );
 }
 
 /// A labelled result figure: a dim caption, the headline value, then any
@@ -76,14 +97,14 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
     let failed = app.game.is_failed();
     let lang = lang_name(app.game.settings.lang_idx);
 
-    let [lwpm_a, lacc_a, _, ltype_a, _, lraw_a, src_a] = Layout::vertical([
+    let [lwpm_a, lacc_a, _, ltype_a, _, lraw_a, _] = Layout::vertical([
         Constraint::Length(2),
         Constraint::Length(2),
         Constraint::Length(1),
         Constraint::Length(3),
         Constraint::Length(1),
         Constraint::Length(2),
-        Constraint::Min(1),
+        Constraint::Min(0),
     ])
     .split(area)[..] else {
         return;
@@ -143,18 +164,6 @@ fn draw_left_panel(f: &mut Frame, area: Rect, app: &App) {
         ),
         lraw_a,
     );
-
-    if let Some(src) = &app.game.quote_source {
-        f.render_widget(
-            Paragraph::new(Span::styled(
-                format!("— {src}"),
-                Style::default()
-                    .fg(th_pending())
-                    .add_modifier(Modifier::ITALIC),
-            )),
-            src_a,
-        );
-    }
 }
 
 fn draw_right_panel(f: &mut Frame, area: Rect, app: &App) {

@@ -478,6 +478,88 @@ mod render_smoke_tests {
         assert!(text.contains('▶'), "missing selection marker: {text}");
     }
 
+    /// Every screen must keep its content at every supported height.
+    ///
+    /// A screen sized as a percentage of the terminal, with fixed-height rows
+    /// inside it, can lose rows to the layout solver at heights where the
+    /// percentage rounds badly — silently, because the rect count still
+    /// matches. That is how the menu came to drop its mode-tab and pool-size
+    /// rows at odd heights while looking correct at 80x24. Checking one or
+    /// two sizes does not catch it; sweeping does.
+    #[test]
+    fn every_screen_keeps_its_content_across_heights() {
+        let entries: Vec<crate::history::HistoryEntry> = (0..5)
+            .map(|_| crate::history::HistoryEntry {
+                wpm: 60.0,
+                accuracy: 95.0,
+                mode: "words 25".into(),
+                timestamp: 0,
+                language: "english".into(),
+            })
+            .collect();
+
+        for h in crate::app::MIN_HEIGHT..=44 {
+            let mut result = App::new();
+            result.screen = Screen::Result;
+            result.game.quote_source = Some("Frank Herbert, Dune".into());
+
+            let mut history = App::new();
+            history.screen = Screen::History;
+            history.last_height = h;
+            history.history = entries.clone();
+
+            let mut settings = App::new();
+            settings.screen = Screen::Settings;
+
+            let cases: [(&str, &App, &[&str]); 3] = [
+                (
+                    "result",
+                    &result,
+                    &[
+                        "wpm",
+                        "acc",
+                        "test type",
+                        "raw",
+                        "characters",
+                        "consistency",
+                        "time",
+                        // Wrapped, so it survives an 18-column panel.
+                        "Frank",
+                        "Herbert",
+                        "Dune",
+                    ],
+                ),
+                (
+                    "history",
+                    &history,
+                    &["history", "best", "wpm", "acc", "lang", "mode", "when", "▶"],
+                ),
+                (
+                    "settings",
+                    &settings,
+                    &[
+                        "settings",
+                        "cursor shape",
+                        "sound",
+                        "volume",
+                        "difficulty",
+                        "theme",
+                    ],
+                ),
+            ];
+
+            for (name, app, expected) in cases {
+                let screen = super::test_render::text(80, h, |f| draw(f, app));
+                for e in expected {
+                    assert!(
+                        screen.contains(e),
+                        "{name} screen lost {e:?} at 80x{h}:\n{screen}"
+                    );
+                }
+            }
+        }
+    }
+
     #[test]
     fn draw_below_min_size_shows_hint_instead_of_panicking() {
         let app = App::new();
