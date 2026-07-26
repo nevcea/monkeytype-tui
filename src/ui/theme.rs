@@ -36,7 +36,7 @@ macro_rules! theme_fields {
         impl ThemeFile {
             fn into_theme(self) -> Option<Theme> {
                 Some(Theme {
-                    // ponytail: user themes load once at startup and live for the whole
+                    // NOTE: user themes load once at startup and live for the whole
                     // run, so leaking the name to get a &'static str keeps Theme: Copy.
                     name: Box::leak(self.name.into_boxed_str()),
                     $($field: parse_hex(&self.$field)?,)*
@@ -65,7 +65,7 @@ theme_fields! {
 /// (see `theme_by_name`), and `all_themes()` appends any user-defined themes.
 /// Colours are positional, matching the `theme_fields!` order above:
 /// bg, correct, wrong, pending, accent / dim, wrong_bg, gauge_bg, fg, sub.
-// ponytail: positional tuples plus `rustfmt::skip` keep each palette to three
+// NOTE: positional tuples plus `rustfmt::skip` keep each palette to three
 // readable rows; naming all ten fields per theme cost ~170 lines of noise.
 #[rustfmt::skip]
 const THEMES: &[Theme] = &[

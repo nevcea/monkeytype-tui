@@ -20,7 +20,7 @@ Provides word/quote typing tests, WPM/accuracy measurement, and result history p
 Scoped rules load automatically when working with matching files — see `.claude/rules/`:
 
 - `.claude/rules/architecture.md` — data flow, core types, module roles, screen flow, WPM formula, adding a language (`src/**/*.rs`, `static/languages,quotes/**/*.json`)
-- `.claude/rules/code-style.md` — ponytail mode, `// ponytail:` markers, single-responsibility, `ui/` immutability (`src/**/*.rs`)
+- `.claude/rules/code-style.md` — deliberate-simplification mode, `// NOTE:` markers, single-responsibility, `ui/` immutability (`src/**/*.rs`)
 - `.claude/rules/testing.md` — `cargo test`, unit-test conventions (`src/**/*.rs`, `tests/**/*.rs`)
 
 ## Commands

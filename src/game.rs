@@ -240,7 +240,7 @@ impl GameState {
             .filter(|(_, q)| filter.matches(q.length))
             .map(|(i, _)| i)
             .collect();
-        // ponytail: fall back to the full list if the filter matched nothing,
+        // NOTE: fall back to the full list if the filter matched nothing,
         // rather than surfacing an empty-selection error to the user.
         if pool.is_empty() {
             pool = (0..self.all_quotes.len()).collect();
@@ -429,7 +429,7 @@ impl GameState {
         // consistency; per-interval samples match monkeytype's per-second bursts.
         let elapsed = self.elapsed().as_secs_f64();
         let interval = (elapsed - self.last_sample_elapsed).max(MIN_SAMPLE_INTERVAL);
-        // ponytail: the end-of-test sample often covers a tiny fraction of a
+        // NOTE: the end-of-test sample often covers a tiny fraction of a
         // second, turning a couple of keystrokes into a 250+ WPM spike that
         // skews both the result chart's y-axis and consistency. Drop the
         // fragment (bookkeeping included, so its delta rolls into the next
@@ -493,7 +493,7 @@ impl GameState {
     }
 
     pub fn elapsed(&self) -> Duration {
-        // ponytail: afk_secs is a display-only stat; it is deliberately NOT
+        // NOTE: afk_secs is a display-only stat; it is deliberately NOT
         // subtracted from the WPM timing window (matches monkeytype behavior).
         match (self.started_at, self.finished_at) {
             (Some(s), Some(e)) => e.duration_since(s),
@@ -648,7 +648,7 @@ fn words_to_chars(words: &[String]) -> Vec<TypedChar> {
 
 const PUNCT_SENTENCE_LEN: usize = 4;
 
-// ponytail: sentence/comma insertion ratios are fixed constants rather than a
+// NOTE: sentence/comma insertion ratios are fixed constants rather than a
 // user-tunable intensity — good enough for typing practice, no config surface.
 fn apply_punctuation(words: Vec<String>, rng: &mut impl Rng) -> Vec<String> {
     let endings = ['.', '!', '?'];

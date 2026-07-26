@@ -278,7 +278,7 @@ impl App {
     /// `config.json`. Called at commit points (mode/language/toggle changes and
     /// settings-screen exits) so preferences survive a restart.
     pub(super) fn persist(&self) {
-        // ponytail: when no audio device is present we can't read live sound
+        // NOTE: when no audio device is present we can't read live sound
         // prefs, so fall back to sensible defaults rather than clobbering to Off.
         let (pack, vol) = self
             .sound
