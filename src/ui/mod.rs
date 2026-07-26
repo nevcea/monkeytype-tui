@@ -363,14 +363,32 @@ pub(super) fn draw_hint_footer(f: &mut Frame, hints: &[Hint]) {
 }
 
 pub(super) fn col<S: Into<String>>(s: S, w: usize, color: Color) -> Span<'static> {
-    use unicode_width::UnicodeWidthStr;
-    // Pad by display width, not char count, so wide (CJK) names stay aligned.
+    use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
+    // Pad or truncate by display width, not char count, so wide (CJK) names
+    // stay aligned and an over-length value can never push later columns out
+    // of the fixed-width row.
     let s = s.into();
-    let pad = w.saturating_sub(s.width());
-    Span::styled(
-        format!("{s}{}", " ".repeat(pad)),
-        Style::default().fg(color),
-    )
+    let text = if s.width() <= w {
+        let pad = w - s.width();
+        format!("{s}{}", " ".repeat(pad))
+    } else if w == 0 {
+        String::new()
+    } else {
+        let mut kept = String::new();
+        let mut used = 0;
+        for c in s.chars() {
+            let cw = c.width().unwrap_or(0);
+            if used + cw > w.saturating_sub(1) {
+                break;
+            }
+            used += cw;
+            kept.push(c);
+        }
+        kept.push('…');
+        used += 1;
+        format!("{kept}{}", " ".repeat(w.saturating_sub(used)))
+    };
+    Span::styled(text, Style::default().fg(color))
 }
 
 #[cfg(test)]
@@ -400,6 +418,25 @@ mod helper_tests {
             assert_eq!(spans[i].style.fg, Some(th_pending()));
             assert!(!spans[i].style.add_modifier.contains(Modifier::UNDERLINED));
         }
+    }
+
+    #[test]
+    fn col_pads_short_values_to_the_target_width() {
+        use unicode_width::UnicodeWidthStr;
+        let span = col("wpm", 6, th_dim());
+        assert_eq!(span.content.width(), 6);
+        assert_eq!(&span.content, "wpm   ");
+    }
+
+    /// A value wider than the column must never be left un-truncated: an
+    /// over-length string previously overflowed into the next column
+    /// (the same bug class fixed for the quote attribution in 596e88d).
+    #[test]
+    fn col_truncates_overlong_values_with_an_ellipsis() {
+        use unicode_width::UnicodeWidthStr;
+        let span = col("azerbaijani_extra_long", 11, th_dim());
+        assert_eq!(span.content.width(), 11);
+        assert!(span.content.ends_with('…'));
     }
 
     #[test]

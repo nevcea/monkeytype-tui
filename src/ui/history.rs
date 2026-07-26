@@ -183,4 +183,32 @@ mod tests {
         let second = marked(&app).expect("a row should still be marked");
         assert_eq!(second, first + 1, "the marker should have moved down a row");
     }
+
+    /// The `lang`/`mode` columns are just wide enough for today's longest
+    /// real values (`col()` truncates anything wider, but a silent
+    /// truncation on real data would still be a regression). If this fails,
+    /// either widen the column in `draw_history` or shrink the value that
+    /// grew past it.
+    #[test]
+    fn the_longest_real_language_and_mode_strings_fit_their_columns() {
+        use unicode_width::UnicodeWidthStr;
+
+        let longest_lang = crate::words::LANGUAGES
+            .iter()
+            .map(|l| l.name)
+            .max_by_key(|n| n.width())
+            .unwrap();
+        assert!(
+            longest_lang.width() <= 11,
+            "{longest_lang:?} no longer fits the lang column"
+        );
+
+        for mode in [
+            crate::game::Mode::Time(3600),
+            crate::game::Mode::Words(5000),
+        ] {
+            let s = mode.to_string();
+            assert!(s.width() <= 10, "{s:?} no longer fits the mode column");
+        }
+    }
 }
