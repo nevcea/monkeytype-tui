@@ -764,6 +764,32 @@ mod tests {
         assert_eq!(g.chars[0].state, CharState::Wrong);
     }
 
+    /// Once the cursor reaches the end of the text there is no overtype
+    /// buffer — further keystrokes must be dropped silently rather than
+    /// panicking on an out-of-bounds `self.chars[self.cursor]` or corrupting
+    /// keystroke/accuracy counters.
+    #[test]
+    fn type_char_past_the_end_of_the_text_is_a_no_op() {
+        let mut g = game();
+        let total_chars = g.chars.len();
+        for _ in 0..total_chars {
+            let expected = g.chars[g.cursor].expected;
+            g.type_char(expected);
+        }
+        assert_eq!(g.cursor, total_chars);
+        assert!(g.is_finished());
+
+        let keystrokes_before = g.total_keystrokes;
+        g.type_char('x');
+        g.type_char('y');
+
+        assert_eq!(g.cursor, total_chars, "cursor must not move past the end");
+        assert_eq!(
+            g.total_keystrokes, keystrokes_before,
+            "keystrokes after the end must not be counted"
+        );
+    }
+
     #[test]
     fn type_char_starts_game() {
         let mut g = game();
