@@ -42,6 +42,12 @@ pub fn data_dir() -> Option<PathBuf> {
 /// Write `contents` to `path` atomically: write a sibling temp file then rename
 /// over the target, so a crash mid-write can't truncate the existing file.
 /// All errors are swallowed — persistence is best-effort.
+///
+/// Known constraint: the pid+counter-unique temp file only guards against two
+/// `write_atomic` calls *within this process* racing on the same path. There
+/// is no cross-process file lock, so if two instances of the app run at once
+/// (e.g. two terminal panes), the last one to save wins and the other's write
+/// is lost. Acceptable for a single-user local TUI; not addressed.
 pub fn write_atomic(path: &Path, contents: &str) {
     use std::sync::atomic::{AtomicU64, Ordering};
 
