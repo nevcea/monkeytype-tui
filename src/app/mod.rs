@@ -372,7 +372,11 @@ impl App {
     }
 
     pub fn tick(&mut self) {
-        if self.screen == Screen::Test {
+        // NOTE: a Time-mode test keeps running while the abandon-test dialog
+        // is open (no pause), but it must not finish and save behind the
+        // dialog — the user would confirm "abandon" on a result that already
+        // got written to history/PB.
+        if self.screen == Screen::Test && !self.dialog.test_confirm && !self.dialog.quit_confirm {
             self.game.tick();
             self.maybe_finish();
         }
@@ -637,6 +641,35 @@ mod input_flow_tests {
         app.on_key(key(KeyCode::Enter));
         assert_eq!(app.screen, Screen::Menu);
         assert!(!app.dialog.test_confirm);
+    }
+
+    #[test]
+    fn tick_does_not_finish_test_while_abandon_dialog_is_open() {
+        let mut app = App::new();
+        app.screen = Screen::Test;
+        app.game = GameState::new(Mode::Time(1), app.settings.clone(), vec![]);
+        app.game.type_char(app.game.chars[0].expected); // starts the timer
+
+        app.on_key(key(KeyCode::Esc));
+        assert!(app.dialog.test_confirm);
+
+        // Backdate the start so the 1s Time test's duration has already
+        // elapsed while the dialog is open, without a real sleep.
+        app.game.started_at = app
+            .game
+            .started_at
+            .map(|t| t - std::time::Duration::from_secs(2));
+        app.tick();
+
+        assert_eq!(
+            app.screen,
+            Screen::Test,
+            "must not switch to Result behind an open dialog"
+        );
+        assert!(
+            !app.game.is_finished(),
+            "must not save/finish a test the user is being asked to abandon"
+        );
     }
 
     fn history_app(entries: usize) -> App {
