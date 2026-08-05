@@ -75,6 +75,12 @@ pub fn write_atomic(path: &Path, contents: &str) {
 /// Read `name` from [`data_dir`] and deserialize it. Returns `T::default()`
 /// when there is no data dir, the file is missing, or its contents are
 /// malformed — persistence is best-effort and must never fail a startup.
+///
+/// A malformed file is renamed aside to `<name>.bak` first: the caller's next
+/// save (e.g. `history`'s `save_entry`, which always rewrites the whole file)
+/// would otherwise overwrite it with a fresh `Default`, permanently losing
+/// whatever was there — up to 50 history entries or every personal best —
+/// with no warning.
 pub fn load_json<T: serde::de::DeserializeOwned + Default>(name: &str) -> T {
     let Some(path) = data_dir().map(|d| d.join(name)) else {
         return T::default();
@@ -82,7 +88,13 @@ pub fn load_json<T: serde::de::DeserializeOwned + Default>(name: &str) -> T {
     let Ok(data) = std::fs::read_to_string(&path) else {
         return T::default();
     };
-    serde_json::from_str(&data).unwrap_or_default()
+    match serde_json::from_str(&data) {
+        Ok(value) => value,
+        Err(_) => {
+            let _ = std::fs::rename(&path, path.with_extension("bak"));
+            T::default()
+        }
+    }
 }
 
 /// Serialize `value` as pretty JSON and write it to `name` in [`data_dir`] via
@@ -163,11 +175,14 @@ mod tests {
         assert_eq!(missing, Sample::default());
 
         // Corrupt file: write garbage into the real data dir, then read it back.
+        // `load_json` renames the corrupt file aside to `.bak` (see the
+        // dedicated backup test below), so clean that up too.
         let name = "monkeytype-tui-test-corrupt.json";
         let path = data_dir().unwrap().join(name);
         write_atomic(&path, "{ this is not json");
         let corrupt: Sample = load_json(name);
         assert_eq!(corrupt, Sample::default());
+        std::fs::remove_file(path.with_extension("bak")).unwrap();
 
         // Well-formed file round-trips instead of silently defaulting.
         write_atomic(&path, r#"{"n": 42}"#);
@@ -175,6 +190,25 @@ mod tests {
         assert_eq!(good, Sample { n: 42 });
 
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn load_json_backs_up_a_corrupt_file_instead_of_discarding_it() {
+        let name = "monkeytype-tui-test-corrupt-backup.json";
+        let path = data_dir().unwrap().join(name);
+        let bak = path.with_extension("bak");
+        std::fs::remove_file(&bak).ok(); // in case a prior failed run left one
+
+        write_atomic(&path, "{ not valid json");
+        let restored: Vec<u8> = load_json(name);
+        assert_eq!(restored, Vec::<u8>::default());
+        assert!(
+            !path.exists(),
+            "corrupt file must be moved aside, not left in place"
+        );
+        assert_eq!(std::fs::read_to_string(&bak).unwrap(), "{ not valid json");
+
+        std::fs::remove_file(&bak).unwrap();
     }
 
     #[test]
