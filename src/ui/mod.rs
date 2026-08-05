@@ -627,6 +627,60 @@ mod render_smoke_tests {
         }
     }
 
+    /// The picker's scroll math steps by a fixed `visible` row count that must
+    /// match how many rows `draw_picker` actually renders, at every supported
+    /// height — otherwise walking to the bottom of the list scrolls the
+    /// highlighted row off screen with no way to bring it back into view.
+    ///
+    /// Asserts on the last language's *name*, not the `▶` glyph — that glyph
+    /// also prefixes the search box's cursor (`"▶ {search}_"`), so it's always
+    /// present regardless of whether the highlighted row itself is visible.
+    #[test]
+    fn lang_picker_selection_marker_stays_reachable_across_heights() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+        let last_lang = crate::words::LANGUAGES.last().unwrap().name;
+
+        for h in crate::app::MIN_HEIGHT..=30 {
+            let mut app = App::new();
+            app.last_width = 80;
+            app.last_height = h;
+            app.on_key(key(KeyCode::Char('l'))); // open the language picker
+            for _ in 0..crate::words::LANGUAGES.len() {
+                app.on_key(key(KeyCode::Down));
+            }
+            let screen = super::test_render::text(80, h, |f| draw(f, &app));
+            assert!(
+                screen.contains(last_lang),
+                "last language {last_lang:?} scrolled out of view at 80x{h}:\n{screen}"
+            );
+        }
+    }
+
+    /// Same as above, for the theme picker — its footer has fewer hints (no
+    /// `←/→ size`), so it exercises a different `hint_rows.len()`.
+    #[test]
+    fn theme_picker_selection_marker_stays_reachable_across_heights() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let key = |c| KeyEvent::new(c, KeyModifiers::NONE);
+        let last_theme = all_themes().last().unwrap().name;
+
+        for h in crate::app::MIN_HEIGHT..=30 {
+            let mut app = App::new();
+            app.last_width = 80;
+            app.last_height = h;
+            app.on_key(key(KeyCode::Char('t'))); // open the theme picker
+            for _ in 0..all_themes().len() {
+                app.on_key(key(KeyCode::Down));
+            }
+            let screen = super::test_render::text(80, h, |f| draw(f, &app));
+            assert!(
+                screen.contains(last_theme),
+                "last theme {last_theme:?} scrolled out of view at 80x{h}:\n{screen}"
+            );
+        }
+    }
+
     #[test]
     fn draw_below_min_size_shows_hint_instead_of_panicking() {
         let app = App::new();

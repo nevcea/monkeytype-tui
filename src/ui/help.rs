@@ -123,6 +123,16 @@ fn help_body(width: u16) -> Vec<Line<'static>> {
 /// longest description ("select mode  (time · words · quote)", 35). Below
 /// this the descriptions clip — 54% of an 80-column terminal is only 43.
 const HELP_MIN_WIDTH: u16 = 52;
+/// Width floor for the language/theme pickers, so 54% of a narrow terminal
+/// doesn't squeeze the footer hints past two lines (see `picker_hint_lines`).
+const PICKER_MIN_WIDTH: u16 = 44;
+/// Fixed chrome around the picker's item list: 2 border rows, the search
+/// line, a gap, and up to 2 footer-hint lines. Content-sized rather than a
+/// percentage of the frame (per the layout invariant in
+/// `.claude/rules/architecture.md`) so `chrome.visible` — which `App`'s
+/// scroll math steps by — always matches what actually renders; a
+/// percentage-height popup silently starved the list on short terminals.
+const PICKER_CHROME_ROWS: u16 = 7;
 
 pub(super) fn draw_help(f: &mut Frame, app: &App) {
     let width = pct(f.area().width, 54).max(HELP_MIN_WIDTH);
@@ -220,7 +230,9 @@ fn draw_picker<T>(
     items: &[T],
     row: impl Fn(&T, bool) -> Line<'static>,
 ) {
-    let area = centered_rect(54, 75, f.area());
+    let width = pct(f.area().width, 54).max(PICKER_MIN_WIDTH);
+    let height = PICKER_CHROME_ROWS + chrome.visible as u16;
+    let area = centered_block(f.area(), width, height);
     let inner = dialog_block(
         f,
         area,
@@ -235,11 +247,16 @@ fn draw_picker<T>(
     // Sized from the reflowed hints, so the footer grows to fit them instead
     // of cutting the last one off.
     let hint_rows = picker_hint_lines(chrome, inner.width);
+    // The list is pinned to `chrome.visible` rows (rather than `Min(0)`) so
+    // `App`'s scroll math — which steps by exactly `chrome.visible` — always
+    // matches what's actually rendered. Any leftover height goes to the gap
+    // below the list instead, which is what shrinks first if the popup is
+    // ever too short to fit everything.
     let [search_a, _, list_a, _, footer_a] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(chrome.visible as u16),
         Constraint::Min(0),
-        Constraint::Length(1),
         Constraint::Length(hint_rows.len() as u16),
     ])
     .split(inner)[..] else {
