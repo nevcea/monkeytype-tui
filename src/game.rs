@@ -20,8 +20,11 @@ const MIN_REAL_INTERVAL: f64 = 0.5;
 const AFK_THRESHOLD_SECS: f64 = 2.0;
 /// Accuracy below this percentage fails the test.
 const FAIL_ACCURACY: f64 = 75.0;
-/// Word pool size sampled for time-based tests.
+/// Minimum word pool size sampled for time-based tests.
 const TIME_MODE_POOL: usize = 500;
+/// Estimated words needed per second of a time-based test (well above any
+/// realistic typing speed), so the pool outlasts the timer.
+const TIME_MODE_WORDS_PER_SEC: usize = 4;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum CharState {
@@ -219,14 +222,11 @@ impl GameState {
     /// (`Some` only in `Mode::Quote`).
     fn pick_words(&mut self, rng: &mut impl Rng) -> (Vec<String>, Option<String>) {
         match self.mode {
-            Mode::Time(_) => (
-                self.all_words
-                    .sample(rng, TIME_MODE_POOL)
-                    .cloned()
-                    .collect(),
+            Mode::Time(secs) => (
+                sample_words(&self.all_words, time_mode_pool(secs), rng),
                 None,
             ),
-            Mode::Words(n) => (self.all_words.sample(rng, n).cloned().collect(), None),
+            Mode::Words(n) => (sample_words(&self.all_words, n, rng), None),
             Mode::Quote => self.pick_quote(rng),
         }
     }
@@ -619,6 +619,29 @@ impl GameState {
     }
 }
 
+/// Number of words to draw for a `Time(secs)` test: generous enough that
+/// typing at any realistic speed never exhausts the pool before the timer
+/// does, but not so large that short tests waste memory.
+fn time_mode_pool(secs: u64) -> usize {
+    (secs as usize * TIME_MODE_WORDS_PER_SEC).max(TIME_MODE_POOL)
+}
+
+/// Draw `target` words from `pool`, repeating shuffled passes over the whole
+/// pool when `target` exceeds its length so long tests never run out of
+/// text. Words can repeat across passes but never trivially — each pass is
+/// an independent shuffle of the full pool.
+fn sample_words(pool: &[String], target: usize, rng: &mut impl Rng) -> Vec<String> {
+    if pool.is_empty() {
+        return Vec::new();
+    }
+    let mut words = Vec::with_capacity(target);
+    while words.len() < target {
+        words.extend(pool.sample(rng, pool.len()).cloned());
+    }
+    words.truncate(target);
+    words
+}
+
 fn compute_word_starts(words: &[String]) -> Vec<usize> {
     words
         .iter()
@@ -734,6 +757,49 @@ mod tests {
     fn word_starts_correct() {
         let words = vec!["hello".to_string(), "world".to_string()];
         assert_eq!(compute_word_starts(&words), vec![0, 6]);
+    }
+
+    #[test]
+    fn sample_words_repeats_pool_to_reach_target() {
+        let pool = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+        let mut rng = rand::rng();
+        let words = sample_words(&pool, 10, &mut rng);
+        assert_eq!(words.len(), 10, "target exceeding pool length is still met");
+        assert!(words.iter().all(|w| pool.contains(w)));
+    }
+
+    #[test]
+    fn sample_words_empty_pool_returns_empty() {
+        let mut rng = rand::rng();
+        assert!(sample_words(&[], 10, &mut rng).is_empty());
+    }
+
+    #[test]
+    fn time_mode_pool_scales_with_duration_and_has_a_floor() {
+        assert_eq!(
+            time_mode_pool(15),
+            TIME_MODE_POOL,
+            "short tests hit the floor"
+        );
+        assert!(time_mode_pool(3600) > TIME_MODE_POOL, "long tests scale up");
+    }
+
+    #[test]
+    fn words_mode_reaches_target_even_when_pool_is_smaller() {
+        // The default english word list is 200 words; ask for far more.
+        let g = GameState::new(Mode::Words(1000), Settings::default(), vec![]);
+        assert_eq!(g.words.len(), 1000);
+    }
+
+    #[test]
+    fn time_mode_leaves_text_for_long_durations() {
+        // With the old fixed 500-word pool, a small language's word list
+        // (e.g. ~175 words) could be exhausted well before a long timer ends.
+        let g = GameState::new(Mode::Time(600), Settings::default(), vec![]);
+        assert!(
+            g.chars.len() > 1000,
+            "long time tests must generate enough text to type through"
+        );
     }
 
     #[test]
