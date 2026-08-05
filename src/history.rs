@@ -33,8 +33,10 @@ impl HistoryEntry {
             format!("{}d ago", diff / 86400)
         } else if diff < 86400 * 30 {
             format!("{}w ago", diff / (86400 * 7))
-        } else {
+        } else if diff < 86400 * 365 {
             format!("{}mo ago", diff / (86400 * 30))
+        } else {
+            format!("{}y ago", diff / (86400 * 365))
         }
     }
 }
@@ -106,6 +108,11 @@ mod tests {
     #[test]
     fn months_ago() {
         assert_eq!(entry_ago(86400 * 60).time_ago(), "2mo ago");
+    }
+
+    #[test]
+    fn years_ago() {
+        assert_eq!(entry_ago(86400 * 365 * 2).time_ago(), "2y ago");
     }
 
     #[test]

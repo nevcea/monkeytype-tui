@@ -9,7 +9,7 @@ impl App {
         let max = self.help_max_scroll();
         let page = self.help_visible_rows();
         match key.code {
-            KeyCode::Esc | KeyCode::Char('q' | '?') => {
+            KeyCode::Esc | KeyCode::Char('q' | 'Q' | '?') => {
                 self.help_scroll = 0;
                 self.screen = Screen::Menu;
             }

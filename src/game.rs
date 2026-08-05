@@ -434,6 +434,14 @@ impl GameState {
         // skews both the result chart's y-axis and consistency. Drop the
         // fragment (bookkeeping included, so its delta rolls into the next
         // sample) rather than special-casing every push_sample call site.
+        //
+        // NOTE: this guard is skipped for the very first sample
+        // (`wpm_samples.is_empty()`), so a difficulty-fail or a finish within
+        // ~`MIN_SAMPLE_INTERVAL` of the test starting can still push one
+        // extreme single-sample spike. Harmless today only because every
+        // consumer (`consistency()`, the result chart) requires at least 2
+        // samples before using them at all — if that ever changes, this
+        // guard needs to cover the first sample too.
         if interval < MIN_REAL_INTERVAL && !self.wpm_samples.is_empty() {
             return;
         }
@@ -444,8 +452,10 @@ impl GameState {
             .push((d_correct as f64 / CHARS_PER_WORD) / (interval / 60.0));
         self.raw_wpm_samples
             .push((d_total as f64 / CHARS_PER_WORD) / (interval / 60.0));
-        self.error_samples
-            .push(self.error_keystrokes - self.last_sample_errors);
+        self.error_samples.push(
+            self.error_keystrokes
+                .saturating_sub(self.last_sample_errors),
+        );
         self.last_sample_errors = self.error_keystrokes;
         self.last_sample_correct = correct;
         self.last_sample_cursor = self.cursor;

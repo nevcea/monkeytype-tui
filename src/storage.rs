@@ -65,6 +65,9 @@ pub fn write_atomic(path: &Path, contents: &str) {
     );
     let tmp = path.with_extension(unique);
     if std::fs::write(&tmp, contents).is_err() {
+        // write() can fail after partially creating/writing `tmp` (e.g. disk
+        // full mid-write); clean up rather than leaving debris behind.
+        let _ = std::fs::remove_file(&tmp);
         return;
     }
     if std::fs::rename(&tmp, path).is_err() {
@@ -137,7 +140,19 @@ mod tests {
         write_atomic(&path, "first");
         write_atomic(&path, "second");
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "second");
-        assert!(!path.with_extension("tmp").exists());
+
+        // The real temp name is `<path>.<pid>-<counter>.tmp` (from
+        // `path.with_extension(unique)`), not `<path>.tmp` — check the
+        // actual pattern rather than one the code never produces.
+        let prefix = path.file_name().unwrap().to_string_lossy().into_owned();
+        let leftovers: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.starts_with(&prefix) && n.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "leftover temp files: {leftovers:?}");
+
         std::fs::remove_file(&path).unwrap();
     }
 

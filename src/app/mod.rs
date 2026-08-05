@@ -78,6 +78,7 @@ pub struct SettingsState {
 /// Put `cursor` at `to` and pull `scroll` so the cursor stays inside the
 /// `visible`-row window. Shared by both menu pickers and the History list.
 pub(super) fn focus_cursor(cursor: &mut usize, scroll: &mut usize, to: usize, visible: usize) {
+    let visible = visible.max(1);
     *cursor = to;
     if *cursor < *scroll {
         *scroll = *cursor;
@@ -380,6 +381,15 @@ impl App {
             self.game.tick();
             self.maybe_finish();
         }
+        // A terminal resize only ever grows history_visible_rows() (arrow
+        // keys are the only thing that scrolls it further), so a scroll
+        // clamped for a shorter terminal can leave rows blank at the bottom
+        // once the terminal grows even though everything now fits. Pull it
+        // back down to what's actually needed every frame.
+        let visible = self.history_visible_rows().max(1);
+        self.history_scroll = self
+            .history_scroll
+            .min(self.history.len().saturating_sub(visible));
     }
 
     /// Single completion path: if the game has finished, persist the result and
@@ -749,6 +759,29 @@ mod input_flow_tests {
         assert_eq!(app.history_cursor, 1);
         // The viewport never moved, because it never needed to.
         assert_eq!(app.history_scroll, 0);
+    }
+
+    /// If the terminal grows while History is scrolled near the bottom, the
+    /// scroll must relax on the next tick instead of leaving blank rows at
+    /// the bottom even though the taller viewport can now show everything.
+    #[test]
+    fn history_scroll_relaxes_after_the_terminal_grows() {
+        let mut app = history_app(0);
+        app.last_height = 24;
+        let small_visible = app.history_visible_rows();
+        app = history_app(small_visible + 3);
+        app.last_height = 24;
+        for _ in 0..50 {
+            app.on_key(key(KeyCode::Down));
+        }
+        assert_eq!(app.history_scroll, 3, "scrolled to the bottom at h=24");
+
+        app.last_height = 60; // grow the terminal well past what's needed
+        app.tick();
+        assert_eq!(
+            app.history_scroll, 0,
+            "scroll must relax once the taller viewport fits everything"
+        );
     }
 
     #[test]

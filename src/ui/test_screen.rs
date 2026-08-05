@@ -257,7 +257,7 @@ pub(super) fn build_word_line<'a>(
     let mut spans: Vec<Span<'a>> = vec![];
     for (pos, &wi) in word_idxs.iter().enumerate() {
         if pos > 0 {
-            let space_idx = game.word_starts[wi] - 1;
+            let space_idx = game.word_starts[wi].saturating_sub(1);
             let sp = &game.chars[space_idx];
             let sp_display = if sp.state == CharState::Wrong {
                 sp.typed.unwrap_or(' ').to_string()

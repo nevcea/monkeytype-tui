@@ -55,6 +55,11 @@ fn main() -> io::Result<()> {
     }));
 
     enable_raw_mode()?;
+    // Constructed immediately after raw mode is enabled, not after the
+    // `execute!` below: if that call fails, the `?` must still unwind
+    // through a live guard, or the terminal is left in raw mode with no
+    // Drop to restore it.
+    let _guard = TerminalGuard;
     // Mouse capture routes drag/click to the app instead of the terminal's own
     // selection, so text can't be highlighted and copied out of the test.
     execute!(
@@ -63,7 +68,6 @@ fn main() -> io::Result<()> {
         EnableBracketedPaste,
         EnableMouseCapture
     )?;
-    let _guard = TerminalGuard;
     let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
     terminal.show_cursor()?;
