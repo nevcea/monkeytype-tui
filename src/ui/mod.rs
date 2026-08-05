@@ -159,8 +159,12 @@ pub(super) fn centered_block(frame: Rect, width: u16, height: u16) -> Rect {
 
 /// `percent`% of `total`, for blocks that scale with the frame. Pair it with
 /// `.max(..)` when the content has a width below which it clips.
+///
+/// Widens to `u32` for the multiply: `total * percent` overflows `u16` once
+/// `total` exceeds roughly `u16::MAX / percent` (e.g. ~1170 columns at 56%),
+/// which a very wide terminal can reach.
 pub(super) fn pct(total: u16, percent: u16) -> u16 {
-    total * percent / 100
+    (total as u32 * percent as u32 / 100) as u16
 }
 
 pub(super) fn centered_rect(pct_x: u16, pct_y: u16, r: Rect) -> Rect {
@@ -449,6 +453,14 @@ mod helper_tests {
     #[test]
     fn label_row_with_no_labels_is_empty() {
         assert!(label_row(std::iter::empty(), 0).is_empty());
+    }
+
+    #[test]
+    fn pct_does_not_overflow_on_a_very_wide_terminal() {
+        // total * percent as raw u16 arithmetic overflows once total exceeds
+        // roughly u16::MAX / percent; a widescreen terminal can reach this.
+        assert_eq!(pct(u16::MAX, 56), 36699);
+        assert_eq!(pct(2000, 90), 1800);
     }
 }
 

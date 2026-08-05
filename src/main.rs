@@ -90,7 +90,7 @@ fn drain_events() -> io::Result<Vec<Event>> {
     Ok(batch)
 }
 
-/// Whether a batch is a paste and should be discarded whole.
+/// Whether a batch looks like a paste rather than typing.
 fn is_paste_burst(batch: &[Event]) -> bool {
     batch
         .iter()
@@ -100,6 +100,23 @@ fn is_paste_burst(batch: &[Event]) -> bool {
         })
         .count()
         >= PASTE_BURST_CHARS
+}
+
+/// Events to actually deliver from a drained batch. A paste burst only drops
+/// the flood of `Char` keystrokes — a slow frame (SSH lag, a big resize) can
+/// queue a real Esc or Ctrl+C alongside enough typed chars to look like a
+/// paste, and discarding the *whole* batch used to swallow that keypress too.
+fn paste_filtered(batch: Vec<Event>) -> Vec<Event> {
+    if !is_paste_burst(&batch) {
+        return batch;
+    }
+    batch
+        .into_iter()
+        .filter(|e| {
+            !matches!(e, Event::Key(k)
+                if k.kind == KeyEventKind::Press && matches!(k.code, KeyCode::Char(_)))
+        })
+        .collect()
 }
 
 fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> {
@@ -122,16 +139,14 @@ fn run(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<()> 
 
         if event::poll(Duration::from_millis(POLL_MS))? {
             let batch = drain_events()?;
-            if !is_paste_burst(&batch) {
-                for ev in batch {
-                    // On unix, bracketed paste arrives as a single Paste event
-                    // and is dropped here; `is_paste_burst` covers Windows,
-                    // where crossterm's console input source never emits one.
-                    if let Event::Key(key) = ev
-                        && key.kind == KeyEventKind::Press
-                    {
-                        app.on_key(key);
-                    }
+            for ev in paste_filtered(batch) {
+                // On unix, bracketed paste arrives as a single Paste event
+                // and is dropped here; `is_paste_burst` covers Windows,
+                // where crossterm's console input source never emits one.
+                if let Event::Key(key) = ev
+                    && key.kind == KeyEventKind::Press
+                {
+                    app.on_key(key);
                 }
             }
         }
@@ -169,5 +184,34 @@ mod paste_tests {
     fn non_char_keys_never_form_a_burst() {
         let held = vec![Event::Key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE)); 20];
         assert!(!is_paste_burst(&held));
+    }
+
+    #[test]
+    fn paste_filtered_drops_only_the_char_presses_in_a_burst() {
+        let mut batch = chars("pasted text"); // 11 chars, well past the threshold
+        batch.push(Event::Key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE)));
+
+        let kept = paste_filtered(batch);
+
+        assert!(
+            kept.iter()
+                .all(|e| !matches!(e, Event::Key(k) if matches!(k.code, KeyCode::Char(_)))),
+            "char presses from the paste must be dropped: {kept:?}"
+        );
+        assert!(
+            kept.iter()
+                .any(|e| matches!(e, Event::Key(k) if k.code == KeyCode::Esc)),
+            "a real Esc queued alongside the paste must still be delivered: {kept:?}"
+        );
+    }
+
+    #[test]
+    fn paste_filtered_is_a_no_op_below_the_burst_threshold() {
+        let mut batch = chars("ab");
+        batch.push(Event::Key(KeyEvent::new(
+            KeyCode::Backspace,
+            KeyModifiers::NONE,
+        )));
+        assert_eq!(paste_filtered(batch.clone()).len(), batch.len());
     }
 }

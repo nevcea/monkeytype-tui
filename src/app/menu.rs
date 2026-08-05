@@ -100,9 +100,15 @@ impl App {
                 apply_preview(self);
             }
             KeyCode::Enter => {
-                // Preview already applied; keep it and persist.
-                self.menu.theme_picker = None;
-                self.persist();
+                // A search with no matches leaves the last-previewed theme
+                // live but nothing highlighted; committing then would apply
+                // a theme the user never actually selected. Keep the picker
+                // open until there's a real match to confirm.
+                if flen > 0 {
+                    // Preview already applied; keep it and persist.
+                    self.menu.theme_picker = None;
+                    self.persist();
+                }
             }
             KeyCode::Esc => {
                 // Restore the theme that was active before opening the picker.

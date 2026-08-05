@@ -672,6 +672,29 @@ mod input_flow_tests {
         );
     }
 
+    #[test]
+    fn theme_picker_enter_is_a_no_op_when_search_matches_nothing() {
+        let mut app = App::new();
+        let original_theme = app.settings.theme_name.clone();
+        app.on_key(key(KeyCode::Char('t'))); // open the theme picker
+
+        // No theme name contains punctuation, so this has zero matches from
+        // the very first keystroke — the preview never moves off the theme
+        // that was active when the picker opened.
+        app.on_key(key(KeyCode::Char('!')));
+        assert_eq!(app.settings.theme_name, original_theme);
+
+        app.on_key(key(KeyCode::Enter));
+        assert!(
+            app.menu.theme_picker.is_some(),
+            "Enter with no matches must not close/commit the picker"
+        );
+        assert_eq!(
+            app.settings.theme_name, original_theme,
+            "must not persist a theme the user never highlighted"
+        );
+    }
+
     fn history_app(entries: usize) -> App {
         let mut app = App::new();
         app.screen = Screen::History;
